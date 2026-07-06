@@ -77,6 +77,18 @@
         {"slug": "evaluating-a-harness", "title": "Evaluating a harness: how you know yours works", "chip": "", "blurb": "Beyond 'it ran': task success, recovery under failure, token efficiency, and safe-by-default behavior. How to actually measure a harness."},
         {"slug": "the-capstone", "title": "The capstone: your own harness", "chip": "SHIP", "blurb": "Assemble the loop, tools, context engine, durability, and orchestration into your own pi-style coding harness, and demo it live. Yours forever."}
       ]
+    },
+    {
+      "id": "real-source", "num": "06", "title": "Pi, for Real: Two Harnesses, Line by Line",
+      "blurb": "A source-study appendix. We put Vercel Academy's teaching harness (TeensyCode) next to Pi's actual production source and answer the questions everyone hand-waves: what does Pi REALLY do for context, cache, and tool output? Every claim here is read straight from the earendil-works/pi codebase.",
+      "articles": [
+        {"slug": "two-reference-harnesses", "title": "Two reference harnesses: TeensyCode vs. Pi", "chip": "MAP", "blurb": "Vercel Academy builds TeensyCode lesson-by-lesson so each step fixes what the last one broke; Pi is a small MIT production core with all the policy in extensions. The package map (ai / agent / coding-agent) and why studying both is the fastest way to understand a real coding agent."},
+        {"slug": "vercel-academy-to-pi-mapping", "title": "The full mapping: 11 modules to Pi's real code", "chip": "TABLE", "blurb": "Every Vercel Academy module mapped to the exact file in Pi that implements it, and how Pi's real choice differs. Loop, tool design, system prompt, sandbox, context, subagents, human-in-the-loop, planning, surfaces, extensibility."},
+        {"slug": "how-pi-manages-context", "title": "How Pi manages context (not 'the last three messages')", "chip": "DEEP", "blurb": "Pi does not keep a fixed message window. It compacts on a real token budget: trigger at contextWindow minus 16,384, keep about 20,000 tokens of recent context, and summarize everything older into a structured digest of decisions and files touched. Read straight from compaction.ts."},
+        {"slug": "how-pi-does-cache-control", "title": "How Pi does cache control: the rolling breakpoint", "chip": "DEEP", "blurb": "Pi attaches an Anthropic ephemeral cache breakpoint to the last tool schema and the newest user message, a rolling breakpoint that follows the conversation so the whole growing prefix is served from cache each turn. Why a 100-turn Pi session stays cheap."},
+        {"slug": "how-pi-truncates-tool-output", "title": "Does Pi serve the agent everything? (No, it truncates)", "chip": "DEEP", "blurb": "Every Pi tool is capped at 2,000 lines or 50 KB, whichever hits first. read keeps the head with offset/limit paging; bash keeps the tail and spills the full output to a temp file with a pointer; grep caps at 100 matches and 500-char lines; find at 1,000 results. Bounded by default, with an escape hatch."},
+        {"slug": "how-pi-does-subagents", "title": "How Pi does subagents: three mechanisms, three scales", "chip": "DEEP", "blurb": "Pi has three answers to 'one job too big for one context': the subagent tool spawns isolated pi subprocesses (single/parallel/chain) driven by markdown role files (scout/planner/worker/reviewer, each with its own tools + model); handoff starts a fresh focused session; the orchestrator drives a whole fleet of instances across machines. Read straight from the extension + orchestrator source."}
+      ]
     }
   ]
 }
