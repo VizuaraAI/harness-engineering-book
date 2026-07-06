@@ -550,7 +550,7 @@ def build_mentor_index():
     total = len(MFLAT)
     main = f"""<div class="section-page book-page mentor-index">
 <div class="crumb">/ mentor-handbook</div>
-<div class="mentor-badge">For mentors · Dr. Raj Dandekar &amp; Shubham Panchal</div>
+<div class="mentor-badge">For mentors · Dr. Raj Dandekar</div>
 <h1 class="sec-h1">The Mentor's Handbook</h1>
 <p class="sec-blurb">{esc(MENTOR['subtitle'])} Every chapter teaches the idea from the ground up — plain words, a metaphor, a by-hand example, the real math, where it runs in production today, and a minute-by-minute plan for teaching it. Read it in order; by the end you can deliver the entire workshop. {total} chapters.</p>
 <a class="btn" href="mg-how-to-use-this-guide.html" style="margin-bottom:6px;display:inline-block">Start: how to use this handbook →</a>

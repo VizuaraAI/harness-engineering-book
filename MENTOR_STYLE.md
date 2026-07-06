@@ -1,6 +1,6 @@
 # Mentor Handbook — Style Spec
 "Teaching Kernel Engineering: A Mentor's Handbook" — the teach-the-teacher companion.
-Audience: the MENTOR (Raj Dandekar + Shubham Panchal) who must first LEARN each idea from zero,
+Audience: the MENTOR (Raj Dandekar) who must first LEARN each idea from zero,
 then STAND UP and TEACH it. Every chapter must leave the mentor able to deliver that piece of the
 workshop confidently. Different from the reference Book (worklog voice): this is warm, simple,
 metaphor-first, and full of teaching scaffolding.
