@@ -100,9 +100,9 @@ The command was acknowledged with a `response` (Pi's `RpcResponse` type — a su
 
 ## The library door: the SDK
 
-The four surfaces all ship inside the `pi` binary. But the seam has one more consequence: if the agent is just an object, you can `import` it. Pi exposes two doors for embedding the core in *your own* program, in `packages/coding-agent/src/core/sdk.ts` and `agent-session-runtime.ts`.
+The four surfaces all ship inside the `pi` binary. But the seam has one more consequence: if the agent is just an object, you can `import` it. Pi exposes a door for embedding the core in *your own* program — `createAgentSession()`, in `packages/coding-agent/src/core/sdk.ts` (built on the runtime in `agent-session-runtime.ts`) — and it opens two ways.
 
-`createAgentSession()` is the batteries-included door. Call it with no arguments and it auto-discovers your extensions, skills, and prompts, restores a prior session if one exists, picks a model, and hands you back a live `session`:
+Called with no arguments, `createAgentSession()` is the batteries-included path: it auto-discovers your extensions, skills, and prompts, restores a prior session if one exists, picks a model, and hands you back a live `session`:
 
 ```typescript
 const { session } = await createAgentSession();
