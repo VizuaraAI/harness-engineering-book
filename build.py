@@ -258,7 +258,7 @@ def build_article(a, idx):
 <div class="art-body">{body}</div>
 {nav}
 </article>"""
-    html_out = shell(f"{a['title']} · Kernel Engineering", art, active_slug=slug, rel="../",
+    html_out = shell(f"{a['title']} · {SITE['title']}", art, active_slug=slug, rel="../",
                      canvas="paper", with_sidebar=True, active_nav="book")
     (DOCS / "a" / f"{slug}.html").write_text(html_out)
 
@@ -277,7 +277,7 @@ def build_section(sec, rel="../"):
 <p class="sec-blurb">{esc(sec['blurb'])}</p>
 <div class="idx-list">{''.join(cards)}</div>
 </div>"""
-    html_out = shell(f"{sec['title']} · Kernel Engineering", main, rel=rel, canvas="dark",
+    html_out = shell(f"{sec['title']} · {SITE['title']}", main, rel=rel, canvas="dark",
                      with_sidebar=True, active_nav="book")
     (DOCS / "s" / f"{sec['id']}.html").write_text(html_out)
 
@@ -531,7 +531,7 @@ def build_mentor_index():
 <a class="btn" href="mg-how-to-use-this-guide.html" style="margin-bottom:6px;display:inline-block">Start: how to use this handbook →</a>
 <div class="chapters">{''.join(parts)}</div>
 </div>"""
-    (DOCS / "mentor" / "index.html").write_text(shell("The Mentor's Handbook · Vizuara Kernel Engineering",
+    (DOCS / "mentor" / "index.html").write_text(shell(f"The Mentor's Handbook · Vizuara {SITE['title']}",
         main, rel="../", canvas="dark", active_nav="mentor"))
 
 def build_partners():
