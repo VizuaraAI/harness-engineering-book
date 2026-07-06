@@ -1,0 +1,117 @@
+<!doctype html><html lang="en" data-theme="terminal"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build: your first bare harness · Kernel Engineering</title>
+<meta name="description" content="Build the layer that turns a model into an agent. A pi-style coding harness, from scratch.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/app.css">
+</head><body class="canvas-paper has-sb">
+<div class="topbar">
+  <a class="brand" href="../index.html"><img class="brand-mark" src="../assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>Kernel&nbsp;Engineering</b></span></a>
+  <nav class="topnav"><a class="tn active" href="../book.html">The Book</a><a class="tn" href="../workshop.html">Workshop</a><a class="tn" href="../projects.html">Projects</a><a class="tn" href="../interactive.html">Interactive</a><a class="tn" href="../mentor/index.html">Mentor Guide</a></nav>
+  <button class="menu-btn" onclick="document.body.classList.toggle(&#39;sb-open&#39;)">☰</button>
+  <div class="top-links">
+    <button class="tbtn icon" id="search-open" title="Search (⌘K)">⌘K</button>
+    <button class="tbtn" id="theme-btn">Terminal</button>
+    <a class="tbtn enroll" href="../workshop.html">Enroll →</a>
+  </div>
+</div>
+<div class="layout">
+<nav class="sidebar" id="sidebar"><a class="sb-home" href="../index.html">‹ kernel engineering</a><details class="sb-sec"><summary><span class="sb-num">00</span> Start Here</summary><a class="sb-item" href="../a/what-is-a-harness.html">What is a harness?</a><a class="sb-item" href="../a/why-just-call-the-api-fails.html">Why 'just call the API' fails</a><a class="sb-item" href="../a/prompt-vs-context-vs-harness.html">Prompt vs. context vs. harness engineering</a><a class="sb-item" href="../a/the-five-layers.html">The anatomy: five layers of a harness<span class="chip">MAP</span></a><a class="sb-item" href="../a/what-you-will-build.html">What you will build: a pi-style harness</a><a class="sb-item" href="../a/how-to-use-this-site.html">How to use this site</a></details><details class="sb-sec" open><summary><span class="sb-num">01</span> The Agent Loop</summary><a class="sb-item" href="../a/the-agent-loop-from-first-principles.html">The agent loop from first principles<span class="chip">LOOP</span></a><a class="sb-item" href="../a/messages-turns-and-roles.html">Messages, turns &amp; roles</a><a class="sb-item" href="../a/stop-conditions.html">Stop conditions: when does the loop end?</a><a class="sb-item" href="../a/streaming-responses.html">Streaming responses into a terminal</a><a class="sb-item" href="../a/the-model-client.html">The model client &amp; provider abstraction</a><a class="sb-item active" href="../a/your-first-bare-harness.html">Build: your first bare harness<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">02</span> Tools &amp; the Execution Environment</summary><a class="sb-item" href="../a/tool-schemas-as-contracts.html">Tool schemas as contracts<span class="chip">TOOLS</span></a><a class="sb-item" href="../a/the-core-file-and-shell-tools.html">The core tools: read, write, edit, bash, search</a><a class="sb-item" href="../a/streaming-tool-calls-to-the-ui.html">Streaming tool calls to the UI</a><a class="sb-item" href="../a/permission-gates-and-approval-modes.html">Permission gates &amp; approval modes</a><a class="sb-item" href="../a/sandboxing-and-blast-radius.html">Sandboxing &amp; the blast-radius problem</a><a class="sb-item" href="../a/code-mode-vs-tool-mode.html">Code-mode vs. tool-mode</a></details><details class="sb-sec"><summary><span class="sb-num">03</span> Context Engineering</summary><a class="sb-item" href="../a/the-context-window-as-a-resource.html">The context window as a resource<span class="chip">CONTEXT</span></a><a class="sb-item" href="../a/context-budgets.html">Context budgets: what goes in, what gets evicted</a><a class="sb-item" href="../a/compaction-and-summarization.html">Compaction &amp; summarization</a><a class="sb-item" href="../a/memory-and-claude-md.html">Memory systems &amp; the CLAUDE.md pattern</a><a class="sb-item" href="../a/system-prompts-as-infrastructure.html">System prompts as infrastructure, not prose</a><a class="sb-item" href="../a/building-the-context-engine.html">Build: the context engine<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">04</span> Durability, Recovery &amp; Orchestration</summary><a class="sb-item" href="../a/durable-execution-and-checkpointing.html">Durable execution &amp; checkpointing<span class="chip">DURABLE</span></a><a class="sb-item" href="../a/replay-and-resumable-sessions.html">Replay &amp; resumable sessions</a><a class="sb-item" href="../a/self-healing-loops.html">Self-healing loops: retries &amp; failure classification</a><a class="sb-item" href="../a/sub-agents-and-handoffs.html">Sub-agents &amp; handoffs</a><a class="sb-item" href="../a/supervision-and-plan-mode.html">Supervision &amp; plan mode</a><a class="sb-item" href="../a/human-in-the-loop.html">Human-in-the-loop: plans, approvals, escalation<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">05</span> Production Harnesses &amp; Capstone</summary><a class="sb-item" href="../a/pi-internals.html">pi internals: the minimal-surface philosophy<span class="chip">pi</span></a><a class="sb-item" href="../a/hermes-internals.html">Hermes internals: a research lab's harness<span class="chip">HERMES</span></a><a class="sb-item" href="../a/claude-code-internals.html">Claude Code internals: skills, hooks, MCP, sub-agents<span class="chip">CC</span></a><a class="sb-item" href="../a/evaluating-a-harness.html">Evaluating a harness: how you know yours works</a><a class="sb-item" href="../a/the-capstone.html">The capstone: your own harness<span class="chip">SHIP</span></a></details></nav>
+<main class="content"><article class="worklog">
+<div class="art-kicker"><span class="art-sec">01 · The Agent Loop</span></div>
+<h1 class="art-title">Build: your first bare harness <span class="chip lg">BUILD</span></h1>
+<div class="art-body"><p>Everything in the last few chapters has been mental scaffolding. Now we write code, and by the end of this page you will have something small enough to hold in your head all at once and yet genuinely an agent: it will decide, act, see the result of its action, and decide again, all on its own, until the job is done. We are building Layer 1 — <a href="the-agent-loop-from-first-principles.html" target="_blank" rel="noopener">the loop</a> — with the thinnest possible everything-else, so nothing distracts from the one idea that matters.</p>
+<p>We will write it in Python against a chat-style model API, in the shape every provider shares.<label for="sn-your-first-bare-harness-1" class="sn-ref">1</label><input type="checkbox" id="sn-your-first-bare-harness-1" class="sn-toggle"><span class="sidenote"><sup>1</sup> We keep the provider details behind a tiny <a href="the-model-client.html" target="_blank" rel="noopener">model client</a> so the harness stays model-agnostic — the same lesson pi teaches with its <code>models.json</code>. Here we inline it to keep the loop in one screen; swapping Anthropic for OpenAI later is a two-line change.</span> Nothing here is framework-specific; you could port it to TypeScript in an afternoon.</p>
+<h2 id="the-three-pieces-we-need">The three pieces we need</h2>
+<p>A bare harness is exactly three things: a <strong>model client</strong> (one function that sends messages and gets a reply), a <strong>message array</strong> (the running conversation, which <em>is</em> the agent's memory), and a <strong>loop</strong> that ties them together with a set of <strong>tools</strong> the model is allowed to call.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/your-first-bare-harness-1.png" alt="The three pieces — model client, message array, and tools — spun together by the loop. That is the whole of a bare harne" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="your-first-bare-harness-1.png"><span class="fig-ph">figure rendering &middot; The three pieces — model client, message array, and tools — spun toget</span></div><figcaption>The three pieces — model client, message array, and tools — spun together by the loop. That is the whole of a bare harness.</figcaption></figure>
+<p>Let me build them in that order.</p>
+<h2 id="piece-1-the-model-client">Piece 1: the model client</h2>
+<p>One function. It takes the conversation so far plus the list of tools the model may use, and returns the model's next message.</p>
+<pre class="code" data-lang="python"><code>import anthropic
+client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the env
+
+def call_model(messages, tools):
+    return client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=4096,
+        system=SYSTEM_PROMPT,
+        messages=messages,
+        tools=tools,        # the schemas the model is allowed to call
+    )</code></pre>
+<p>That's the entire "AI" part of our agent. Everything else we write is the harness around it. Notice already that <code>messages</code> and <code>tools</code> are <em>inputs we control</em> — the harness decides what the model sees. Hold that thought; it is the seed of context engineering.</p>
+<h2 id="piece-2-the-tools-schema-function">Piece 2: the tools (schema + function)</h2>
+<p>A tool, from the model's side, is a <strong>name, a description, and a JSON schema for its arguments</strong> — a contract it reads to know what it can do and how to call it.<label for="sn-your-first-bare-harness-2" class="sn-ref">2</label><input type="checkbox" id="sn-your-first-bare-harness-2" class="sn-toggle"><span class="sidenote"><sup>2</sup> We treat this contract as the whole subject of <a href="tool-schemas-as-contracts.html" target="_blank" rel="noopener">tool schemas as contracts</a>. The shape of the schema is how you <em>teach</em> the model to use the tool correctly, so it deserves real care. Here we define two tiny ones just to make the loop concrete.</span> From our side, each tool is also an actual function we run when the model asks for it. So a tool has two halves that we keep side by side.</p>
+<pre class="code" data-lang="python"><code>import subprocess, pathlib
+
+TOOLS = [
+    {
+        "name": "read_file",
+        "description": "Read a text file and return its contents.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "run_bash",
+        "description": "Run a shell command and return stdout+stderr.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"cmd": {"type": "string"}},
+            "required": ["cmd"],
+        },
+    },
+]
+
+def run_tool(name, args):
+    if name == "read_file":
+        return pathlib.Path(args["path"]).read_text()
+    if name == "run_bash":
+        r = subprocess.run(args["cmd"], shell=True, capture_output=True, text=True)
+        return (r.stdout + r.stderr)[:4000]
+    return f"unknown tool: {name}"</code></pre>
+<p>Two things are missing here that a real harness must not skip — there is <strong>no permission gate</strong> before <code>run_bash</code>, and <strong>no sandbox</strong>. We are leaving them out <em>on purpose</em> so the loop is naked and obvious; we add exactly those in <a href="permission-gates-and-approval-modes.html" target="_blank" rel="noopener">Layer 2</a>, and you will feel viscerally why they matter the first time the model runs a command you didn't expect.</p>
+<h2 id="piece-3-the-loop">Piece 3: the loop</h2>
+<p>Now the heart. Read it slowly — it is fifteen lines and it is the whole of agency.</p>
+<pre class="code" data-lang="python"><code>def run_agent(user_request):
+    messages = [{"role": "user", "content": user_request}]
+    while True:
+        reply = call_model(messages, TOOLS)               # 1. ask the model
+        messages.append({"role": "assistant", "content": reply.content})
+
+        if reply.stop_reason != "tool_use":               # 2. no tool? we're done
+            return text_of(reply)
+
+        tool_results = []
+        for block in reply.content:                       # 3. run every tool it asked for
+            if block.type == "tool_use":
+                out = run_tool(block.name, block.input)
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": str(out),
+                })
+        messages.append({"role": "user", "content": tool_results})  # 4. feed results back
+        # 5. loop: the model now sees the results and decides what to do next</code></pre>
+<p>Trace one lap. We put the user's request into the message array and call the model. The model replies — maybe with text, maybe asking to use a tool. We <strong>append its reply to the array</strong> (this is the agent remembering what it just decided). If it didn't ask for a tool, it's finished and we return its answer. If it <em>did</em>, we run each requested tool, wrap the outputs as <code>tool_result</code> messages, <strong>append those to the array</strong>, and loop. Next time around, the model sees its own request <em>and</em> the results, and decides the next move.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/your-first-bare-harness-2.png" alt="One lap of the loop: call, check for a tool request, run it, append the result, repeat. The loop ends only when the mode" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="your-first-bare-harness-2.png"><span class="fig-ph">figure rendering &middot; One lap of the loop: call, check for a tool request, run it, append th</span></div><figcaption>One lap of the loop: call, check for a tool request, run it, append the result, repeat. The loop ends only when the model stops asking for tools.</figcaption></figure>
+<p>That is the whole thing. Give it a request like <em>"Read pyproject.toml and tell me the Python version, then list the test files"</em> and watch it: it will ask to <code>read_file</code>, get the contents, then ask to <code>run_bash</code> with an <code>ls</code>, get the listing, and finally answer in plain text — three laps of the loop, no human in between.</p>
+<h2 id="the-subtlety-hiding-in-we-re-done">The subtlety hiding in "we're done"</h2>
+<p>The one line worth staring at is the stop condition: <code>if reply.stop_reason != "tool_use": return</code>.<label for="sn-your-first-bare-harness-3" class="sn-ref">3</label><input type="checkbox" id="sn-your-first-bare-harness-3" class="sn-toggle"><span class="sidenote"><sup>3</sup> We give <a href="stop-conditions.html" target="_blank" rel="noopener">stop conditions</a> their own chapter because getting this wrong is how you get an agent stuck in an infinite loop of politely re-reading the same file forever. Real harnesses add a max-turns guard and an interrupt path on top of the model's own signal.</span> The loop keeps going <em>as long as the model keeps asking for tools</em>, and stops the instant it produces a plain answer instead. The agent decides when it is finished — not us. That inversion of control is precisely what separates an agent from a script, and it is why the loop, not the model, is Layer 1 of the harness.</p>
+<h2 id="what-you-built-and-what-it-s-still-missing">What you built, and what it's still missing</h2>
+<p>In about forty lines you have a real coding agent: it plans, acts on your actual machine, observes results, and iterates to a conclusion on its own. That is not a toy — it is the identical skeleton inside Claude Code and pi. What it is missing is everything that makes such an agent <em>survivable</em>: it will happily run a dangerous command (Layer 2 fixes that), it will choke when the conversation outgrows the context window (Layer 3), it loses all its work if the process dies (Layer 4), and it can't split a job too big for one context (Layer 5).</p>
+<p>So we have our honest baseline — the smallest thing that genuinely acts — and a clear list of what to build next. That is the rhythm for the rest of the book: add one layer, feel exactly what it buys you, and watch your harness get closer to something you would actually trust. Next we give it hands, safely: <a href="tool-schemas-as-contracts.html" target="_blank" rel="noopener">tool schemas as contracts</a>.</p></div>
+<div class="prevnext"><a class="pn prev" href="the-model-client.html"><span>‹ previous</span>The model client &amp; provider abstraction</a><a class="pn next" href="tool-schemas-as-contracts.html"><span>next ›</span>Tool schemas as contracts</a></div>
+</article></main>
+</div>
+<div class="search-modal" id="search-modal"><div class="search-box">
+  <input id="search-input" placeholder="Search articles, terms, kernels…" autocomplete="off">
+  <div id="search-results"></div>
+  <div class="search-hint">↑↓ to navigate · ↵ to open · esc to close</div>
+</div></div>
+<script>window.SEARCH_BASE="../";</script>
+<script src="../assets/app.js"></script>
+</body></html>

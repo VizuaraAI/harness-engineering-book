@@ -1,0 +1,37 @@
+<!doctype html><html lang="en" data-theme="terminal"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Mentor's Handbook · Vizuara Kernel Engineering</title>
+<meta name="description" content="Build the layer that turns a model into an agent. A pi-style coding harness, from scratch.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/app.css">
+</head><body class="canvas-dark">
+<div class="topbar">
+  <a class="brand" href="../index.html"><img class="brand-mark" src="../assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>Kernel&nbsp;Engineering</b></span></a>
+  <nav class="topnav"><a class="tn" href="../book.html">The Book</a><a class="tn" href="../workshop.html">Workshop</a><a class="tn" href="../projects.html">Projects</a><a class="tn" href="../interactive.html">Interactive</a><a class="tn active" href="../mentor/index.html">Mentor Guide</a></nav>
+  
+  <div class="top-links">
+    <button class="tbtn icon" id="search-open" title="Search (⌘K)">⌘K</button>
+    <button class="tbtn" id="theme-btn">Terminal</button>
+    <a class="tbtn enroll" href="../workshop.html">Enroll →</a>
+  </div>
+</div>
+<div class="layout nosb">
+
+<main class="content"><div class="section-page book-page mentor-index">
+<div class="crumb">/ mentor-handbook</div>
+<div class="mentor-badge">For mentors · Dr. Raj Dandekar &amp; Shubham Panchal</div>
+<h1 class="sec-h1">The Mentor's Handbook</h1>
+<p class="sec-blurb">Teaching Harness Engineering — everything a mentor must learn, from the agent loop up, to deliver the five-day workshop and build a pi-style harness live with the cohort. Every chapter teaches the idea from the ground up — plain words, a metaphor, a by-hand example, the real math, where it runs in production today, and a minute-by-minute plan for teaching it. Read it in order; by the end you can deliver the entire workshop. 18 chapters.</p>
+<a class="btn" href="mg-how-to-use-this-guide.html" style="margin-bottom:6px;display:inline-block">Start: how to use this handbook →</a>
+<div class="chapters"><div class="chapter"><div class="ch-side"><div class="ch-num">00</div><div class="ch-title">Before You Teach</div><div class="ch-count">2 chapters</div></div><div class="ch-body"><p class="ch-blurb">The mindset and the single story that connects all five days: build a coding harness like pi, one layer at a time.</p><div class="ch-arts"><a href="mg-how-to-use-this-guide.html" class="ch-art">How to use this handbook</a><a href="mg-the-whole-arc.html" class="ch-art">The whole arc: five layers, one harness</a></div></div></div><div class="chapter"><div class="ch-side"><div class="ch-num">01</div><div class="ch-title">Foundations You Must Feel</div><div class="ch-count">3 chapters</div></div><div class="ch-body"><p class="ch-blurb">The bedrock: what a harness even is, the three engineering disciplines, and the five layers, explained so simply a beginner keeps up.</p><div class="ch-arts"><a href="mg-why-agents-need-a-harness.html" class="ch-art">Why an agent needs a harness</a><a href="mg-prompt-vs-context-vs-harness.html" class="ch-art">Prompt vs. context vs. harness, simply</a><a href="mg-the-five-layers-map.html" class="ch-art">The five layers, drawn</a></div></div></div><div class="chapter"><div class="ch-side"><div class="ch-num">02</div><div class="ch-title">Teaching the Loop</div><div class="ch-count">3 chapters</div></div><div class="ch-body"><p class="ch-blurb">Day 1. How to teach the agent loop from first principles and get the class to a working bare harness.</p><div class="ch-arts"><a href="mg-teach-the-agent-loop.html" class="ch-art">Teaching the agent loop</a><a href="mg-teach-messages-and-turns.html" class="ch-art">Teaching messages, turns &amp; state</a><a href="mg-teach-the-bare-harness.html" class="ch-art">Teaching the first bare harness (live build)</a></div></div></div><div class="chapter"><div class="ch-side"><div class="ch-num">03</div><div class="ch-title">Teaching Tools &amp; Safety</div><div class="ch-count">3 chapters</div></div><div class="ch-body"><p class="ch-blurb">Day 2. How to teach tool schemas, wiring real file/shell tools into the loop, and the permission + sandbox story.</p><div class="ch-arts"><a href="mg-teach-tools-as-contracts.html" class="ch-art">Teaching tools as contracts</a><a href="mg-teach-permissions-and-sandboxing.html" class="ch-art">Teaching permissions &amp; sandboxing</a><a href="mg-teach-wiring-tools.html" class="ch-art">Teaching the tools build (live)</a></div></div></div><div class="chapter"><div class="ch-side"><div class="ch-num">04</div><div class="ch-title">Teaching Context Engineering</div><div class="ch-count">2 chapters</div></div><div class="ch-body"><p class="ch-blurb">Day 3. How to teach the context window as a scarce resource, compaction, and memory.</p><div class="ch-arts"><a href="mg-teach-compaction-and-memory.html" class="ch-art">Teaching compaction &amp; memory</a><a href="mg-teach-the-context-engine.html" class="ch-art">Teaching the context engine (live build)</a></div></div></div><div class="chapter"><div class="ch-side"><div class="ch-num">05</div><div class="ch-title">Teaching Durability &amp; Orchestration</div><div class="ch-count">2 chapters</div></div><div class="ch-body"><p class="ch-blurb">Day 4. How to teach checkpointing, recovery, and sub-agents under supervision.</p><div class="ch-arts"><a href="mg-teach-checkpointing-recovery.html" class="ch-art">Teaching checkpointing &amp; recovery</a><a href="mg-teach-subagents-orchestration.html" class="ch-art">Teaching sub-agents &amp; orchestration</a></div></div></div><div class="chapter"><div class="ch-side"><div class="ch-num">06</div><div class="ch-title">Delivery Craft</div><div class="ch-count">3 chapters</div></div><div class="ch-body"><p class="ch-blurb">Turning understanding into five great live days, and running the capstone.</p><div class="ch-arts"><a href="mg-lecture-plans-day-1-3.html" class="ch-art">Lecture plans: Days 1-3, block by block</a><a href="mg-lecture-plans-day-4-5.html" class="ch-art">Lecture plans: Days 4-5, block by block</a><a href="mg-running-the-capstone.html" class="ch-art">Running the capstone: their own harness</a></div></div></div></div>
+</div></main>
+</div>
+<div class="search-modal" id="search-modal"><div class="search-box">
+  <input id="search-input" placeholder="Search articles, terms, kernels…" autocomplete="off">
+  <div id="search-results"></div>
+  <div class="search-hint">↑↓ to navigate · ↵ to open · esc to close</div>
+</div></div>
+<script>window.SEARCH_BASE="../";</script>
+<script src="../assets/app.js"></script>
+</body></html>

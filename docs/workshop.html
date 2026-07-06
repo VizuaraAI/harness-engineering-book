@@ -1,0 +1,41 @@
+<!doctype html><html lang="en" data-theme="terminal"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Harness Engineering Workshop · Vizuara</title>
+<meta name="description" content="Build the layer that turns a model into an agent. A pi-style coding harness, from scratch.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+</head><body class="canvas-dark">
+<div class="topbar">
+  <a class="brand" href="index.html"><img class="brand-mark" src="assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>Kernel&nbsp;Engineering</b></span></a>
+  <nav class="topnav"><a class="tn" href="book.html">The Book</a><a class="tn active" href="workshop.html">Workshop</a><a class="tn" href="projects.html">Projects</a><a class="tn" href="interactive.html">Interactive</a><a class="tn" href="mentor/index.html">Mentor Guide</a></nav>
+  
+  <div class="top-links">
+    <button class="tbtn icon" id="search-open" title="Search (⌘K)">⌘K</button>
+    <button class="tbtn" id="theme-btn">Terminal</button>
+    <a class="tbtn enroll" href="workshop.html">Enroll →</a>
+  </div>
+</div>
+<div class="layout nosb">
+
+<main class="content"><div class="section-page workshop">
+<div class="crumb">/ the-workshop</div>
+<h1 class="sec-h1">The Harness Engineering Workshop</h1>
+<p class="sec-blurb">Five live mornings. Each day builds one layer of your own coding harness, in the spirit of <a href="https://pi.dev" target="_blank" rel="noopener">pi</a> — from a bare loop to a durable, orchestrated agent you demo on Friday. Enrolled students get the complete 35-chapter <a href="book.html">book</a>, the <a href="interactive.html">quizzes</a>, and the <a href="projects.html">guided build projects</a>.</p>
+<h2 class="ws-h2">5 live days <span class="ws-sub">one layer per day · 7:00–9:00 AM IST</span></h2>
+<div class="lec-grid"><div class="lec"><div class="lec-tag">Day 1</div><div><div class="lec-title">The Anatomy of a Harness</div><div class="lec-desc">Why 'just call the API' fails; prompt vs. context vs. harness engineering; the agent loop from first principles. Build: a bare harness — model client, message array, and a hand-rolled loop.</div></div></div><div class="lec"><div class="lec-tag">Day 2</div><div><div class="lec-title">Tools &amp; the Execution Environment</div><div class="lec-desc">Tool schemas as contracts; read / write / edit / bash / search; permission gates and approval modes; sandboxing and the blast radius. Build: real file and shell tools wired into your loop, safely.</div></div></div><div class="lec"><div class="lec-tag">Day 3</div><div><div class="lec-title">Context Engineering Inside the Harness</div><div class="lec-desc">Context budgets; compaction and summarization; memory and the CLAUDE.md pattern; system prompts as infrastructure. Build: compaction plus a persistent memory layer that survives a long session.</div></div></div><div class="lec"><div class="lec-tag">Day 4</div><div><div class="lec-title">Durability, Recovery &amp; Orchestration</div><div class="lec-desc">Checkpointing every turn and tool call; replay on restart; self-healing loops; sub-agents and handoffs; supervision and human-in-the-loop. Build: checkpointed execution and a sub-agent dispatcher with an approval gate.</div></div></div><div class="lec"><div class="lec-tag">Day 5</div><div><div class="lec-title">Production Harnesses &amp; Capstone</div><div class="lec-desc">pi, Hermes and Claude Code internals; how to evaluate a harness. Capstone: assemble the loop, tools, context engine, recovery and orchestration into your own pi-style harness and demo it live.</div></div></div></div>
+<div class="ws-cta">
+  <div class="ws-price">You leave with your own working coding agent</div>
+  <a class="btn solid" href="https://harnessengineering.vizuara.ai" target="_blank" rel="noopener">Enrollment &amp; dates →</a>
+  <p class="ws-note">Questions? <a href="mailto:team@vizuara.com">team@vizuara.com</a></p>
+</div>
+</div></main>
+</div>
+<div class="search-modal" id="search-modal"><div class="search-box">
+  <input id="search-input" placeholder="Search articles, terms, kernels…" autocomplete="off">
+  <div id="search-results"></div>
+  <div class="search-hint">↑↓ to navigate · ↵ to open · esc to close</div>
+</div></div>
+<script>window.SEARCH_BASE="";</script>
+<script src="assets/app.js"></script>
+</body></html>

@@ -1,0 +1,67 @@
+{
+  "title": "The Mentor's Handbook",
+  "subtitle": "Teaching Harness Engineering — everything a mentor must learn, from the agent loop up, to deliver the five-day workshop and build a pi-style harness live with the cohort.",
+  "for": "Dr. Raj Dandekar & the Vizuara teaching team",
+  "parts": [
+    {
+      "id": "before-you-teach", "num": "00", "title": "Before You Teach",
+      "blurb": "The mindset and the single story that connects all five days: build a coding harness like pi, one layer at a time.",
+      "chapters": [
+        {"slug": "mg-how-to-use-this-guide", "title": "How to use this handbook", "blurb": "The seven ingredients in every chapter, and how to prep a live day from it: learn the layer, then teach it while building it live."},
+        {"slug": "mg-the-whole-arc", "title": "The whole arc: five layers, one harness", "blurb": "The story that ties the week together: loop, tools, context, durability, orchestration, assembled into a working pi-style harness by Friday. Drawn as one map."}
+      ]
+    },
+    {
+      "id": "foundations", "num": "01", "title": "Foundations You Must Feel",
+      "blurb": "The bedrock: what a harness even is, the three engineering disciplines, and the five layers, explained so simply a beginner keeps up.",
+      "chapters": [
+        {"slug": "mg-why-agents-need-a-harness", "title": "Why an agent needs a harness", "blurb": "The model is a brain in a jar; the harness is the body. Taught with a metaphor a student never forgets, then tied to Claude Code and pi."},
+        {"slug": "mg-prompt-vs-context-vs-harness", "title": "Prompt vs. context vs. harness, simply", "blurb": "Three disciplines drawn as three concentric circles: what you say, what the model sees, what it lives inside. The boundary students always blur, and the fix."},
+        {"slug": "mg-the-five-layers-map", "title": "The five layers, drawn", "blurb": "Loop, tools, context, durability, orchestration as a stack you build up. The map you draw on the board on day one and return to all week."}
+      ]
+    },
+    {
+      "id": "teach-loop", "num": "02", "title": "Teaching the Loop",
+      "blurb": "Day 1. How to teach the agent loop from first principles and get the class to a working bare harness.",
+      "chapters": [
+        {"slug": "mg-teach-the-agent-loop", "title": "Teaching the agent loop", "blurb": "The whole of agency as a while-loop, taught with a to-do-list metaphor. The board sequence, the live demo, and the aha moment."},
+        {"slug": "mg-teach-messages-and-turns", "title": "Teaching messages, turns & state", "blurb": "The message array as the agent's whole memory-so-far. How to make 'the array is the state' click, and where students get confused."},
+        {"slug": "mg-teach-the-bare-harness", "title": "Teaching the first bare harness (live build)", "blurb": "How to build the smallest real agent live: model client, message array, loop. Timings, what to type, what to let them try."}
+      ]
+    },
+    {
+      "id": "teach-tools", "num": "03", "title": "Teaching Tools & Safety",
+      "blurb": "Day 2. How to teach tool schemas, wiring real file/shell tools into the loop, and the permission + sandbox story.",
+      "chapters": [
+        {"slug": "mg-teach-tools-as-contracts", "title": "Teaching tools as contracts", "blurb": "A tool schema as a job description the model reads. The metaphor, a by-hand example, and how to teach why the schema shape matters."},
+        {"slug": "mg-teach-permissions-and-sandboxing", "title": "Teaching permissions & sandboxing", "blurb": "Why the agent asks before rm, and the blast-radius idea taught as a kitchen with a fire door. The safety story every student should internalize."},
+        {"slug": "mg-teach-wiring-tools", "title": "Teaching the tools build (live)", "blurb": "Wiring read/write/edit/bash into the loop so the harness edits real code safely, live. The demo that makes students gasp."}
+      ]
+    },
+    {
+      "id": "teach-context", "num": "04", "title": "Teaching Context Engineering",
+      "blurb": "Day 3. How to teach the context window as a scarce resource, compaction, and memory.",
+      "chapters": [
+        {"slug": "mg-teach-compaction-and-memory", "title": "Teaching compaction & memory", "blurb": "The context window as a small desk you keep tidying, with a notebook (CLAUDE.md) for what must survive. Metaphors, the running-summary trick, and the demo."},
+        {"slug": "mg-teach-the-context-engine", "title": "Teaching the context engine (live build)", "blurb": "Building compaction + persistent memory into the loop so the harness survives a long session. How to pace it and what to profile with the class."}
+      ]
+    },
+    {
+      "id": "teach-durability", "num": "05", "title": "Teaching Durability & Orchestration",
+      "blurb": "Day 4. How to teach checkpointing, recovery, and sub-agents under supervision.",
+      "chapters": [
+        {"slug": "mg-teach-checkpointing-recovery", "title": "Teaching checkpointing & recovery", "blurb": "Durable execution as a video-game save point, taught simply. Why replay returns cached results, and the crash-and-resume demo that lands it."},
+        {"slug": "mg-teach-subagents-orchestration", "title": "Teaching sub-agents & orchestration", "blurb": "When one context can't hold the job: spawn a focused helper, get its answer back. The delegation metaphor, plan-mode, and the human-in-the-loop gate."}
+      ]
+    },
+    {
+      "id": "delivery", "num": "06", "title": "Delivery Craft",
+      "blurb": "Turning understanding into five great live days, and running the capstone.",
+      "chapters": [
+        {"slug": "mg-lecture-plans-day-1-3", "title": "Lecture plans: Days 1-3, block by block", "blurb": "Timings, board sequences, the live-build checkpoints, and the questions to ask for the loop, tools, and context days."},
+        {"slug": "mg-lecture-plans-day-4-5", "title": "Lecture plans: Days 4-5, block by block", "blurb": "Durability + orchestration, then the production-harness dissections (pi, Hermes, Claude Code) and the capstone kickoff."},
+        {"slug": "mg-running-the-capstone", "title": "Running the capstone: their own harness", "blurb": "How to set up, mentor, and review each student assembling their own pi-style harness, and how to run the final demos."}
+      ]
+    }
+  ]
+}

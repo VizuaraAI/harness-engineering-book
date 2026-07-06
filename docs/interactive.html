@@ -1,0 +1,50 @@
+<!doctype html><html lang="en" data-theme="terminal"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interactive · Vizuara Harness Engineering</title>
+<meta name="description" content="Build the layer that turns a model into an agent. A pi-style coding harness, from scratch.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+</head><body class="canvas-dark">
+<div class="topbar">
+  <a class="brand" href="index.html"><img class="brand-mark" src="assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>Kernel&nbsp;Engineering</b></span></a>
+  <nav class="topnav"><a class="tn" href="book.html">The Book</a><a class="tn" href="workshop.html">Workshop</a><a class="tn" href="projects.html">Projects</a><a class="tn active" href="interactive.html">Interactive</a><a class="tn" href="mentor/index.html">Mentor Guide</a></nav>
+  
+  <div class="top-links">
+    <button class="tbtn icon" id="search-open" title="Search (⌘K)">⌘K</button>
+    <button class="tbtn" id="theme-btn">Terminal</button>
+    <a class="tbtn enroll" href="workshop.html">Enroll →</a>
+  </div>
+</div>
+<div class="layout nosb">
+
+<main class="content"><div class="section-page interactive-page">
+<div class="crumb">/ interactive</div>
+<h1 class="sec-h1">Interactive</h1>
+<p class="sec-blurb">Practice, not just reading. Test yourself against the core ideas, then build the harness layer by layer through the guided projects.</p>
+
+<div class="int-panel">
+  <div class="int-head"><h2 class="ws-h2">The build-along track</h2></div>
+  <p class="int-p">Read three real harnesses, then build your own one layer at a time — the loop, the tools, the context engine, durability, orchestration. Study the case studies alongside your build.</p>
+  <div class="int-links">
+    <a class="btn" href="https://pi.dev" target="_blank" rel="noopener">pi ↗</a>
+    <a class="btn" href="https://hermes-agent.nousresearch.com" target="_blank" rel="noopener">Hermes ↗</a>
+    <a class="btn" href="projects.html">The guided builds →</a>
+  </div>
+</div>
+
+<div class="int-panel">
+  <div class="int-head"><h2 class="ws-h2">Quiz yourself</h2><span class="quiz-score" id="quiz-score">0 / 12</span></div>
+  <p class="int-p">Twelve questions spanning the loop, tools, context, durability and orchestration. Pick an answer to see the explanation.</p>
+  <div class="quiz" data-total="12"><div class="quiz-q" data-correct="1"><div class="q-num">Q1</div><div class="q-text">What best describes the difference between a model and a harness?</div><div class="q-opts"><button class="q-opt" data-i="0">The harness is a bigger model</button><button class="q-opt" data-i="1">The harness is the loop, tools, memory and recovery wrapped around the model</button><button class="q-opt" data-i="2">They are the same thing</button></div><div class="q-exp">A model does transactional inference; the harness is everything around it that turns that into a working agent.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q2</div><div class="q-text">At its core, the agent loop is…</div><div class="q-opts"><button class="q-opt" data-i="0">A single API call</button><button class="q-opt" data-i="1">Call the model → run the tool it asks for → feed the result back → repeat until done</button><button class="q-opt" data-i="2">A database query</button></div><div class="q-exp">The whole of agency is that while-loop: the model decides, the harness executes, and the result goes back in.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q3</div><div class="q-text">In a harness, what actually holds the agent's state between turns?</div><div class="q-opts"><button class="q-opt" data-i="0">A SQL database</button><button class="q-opt" data-i="1">The message array (the running conversation)</button><button class="q-opt" data-i="2">The system prompt only</button></div><div class="q-exp">The array of typed messages IS the agent's memory-so-far; each turn appends to it.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q4</div><div class="q-text">A tool, as the model sees it, is essentially…</div><div class="q-opts"><button class="q-opt" data-i="0">A Python decorator</button><button class="q-opt" data-i="1">A name + a JSON-schema for its arguments + a function</button><button class="q-opt" data-i="2">A prompt template</button></div><div class="q-exp">The schema is the contract between the model and your code — get its shape right and the model calls it correctly.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q5</div><div class="q-text">Why does a good harness ask before running `rm -rf` or a destructive command?</div><div class="q-opts"><button class="q-opt" data-i="0">To slow the agent down</button><button class="q-opt" data-i="1">A permission gate sits between a tool call and its execution for dangerous actions</button><button class="q-opt" data-i="2">The model can't run commands</button></div><div class="q-exp">Approval modes / allow-lists are the human-in-the-loop gate that keeps an autonomous agent safe.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q6</div><div class="q-text">What problem does sandboxing a harness solve?</div><div class="q-opts"><button class="q-opt" data-i="0">It makes the model smarter</button><button class="q-opt" data-i="1">It contains the blast radius of a mistaken or malicious tool call</button><button class="q-opt" data-i="2">It speeds up token streaming</button></div><div class="q-exp">An agent runs arbitrary commands; the sandbox limits what a bad call can touch.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q7</div><div class="q-text">Compaction in a harness means…</div><div class="q-opts"><button class="q-opt" data-i="0">Compressing the model weights</button><button class="q-opt" data-i="1">Summarizing old turns into a running summary so a long session fits the window</button><button class="q-opt" data-i="2">Deleting the system prompt</button></div><div class="q-exp">The context window is finite; compaction keeps a 200-turn session coherent without blowing the budget.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q8</div><div class="q-text">The CLAUDE.md pattern is about…</div><div class="q-opts"><button class="q-opt" data-i="0">Styling the terminal</button><button class="q-opt" data-i="1">Persistent memory the harness loads every session so the agent starts knowing the project</button><button class="q-opt" data-i="2">A logging format</button></div><div class="q-exp">It's durable project facts, reloaded each run, so the agent doesn't relearn the codebase every time.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q9</div><div class="q-text">Durable execution / checkpointing gives a harness…</div><div class="q-opts"><button class="q-opt" data-i="0">Faster inference</button><button class="q-opt" data-i="1">The ability to replay after a crash by returning cached step results instead of re-running</button><button class="q-opt" data-i="2">A smaller model</button></div><div class="q-exp">Every model turn and tool call is a persisted step; on restart, replay skips the work already done.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q10</div><div class="q-text">When should a harness spawn a sub-agent?</div><div class="q-opts"><button class="q-opt" data-i="0">On every single tool call</button><button class="q-opt" data-i="1">When one context can't hold the whole job, so a focused helper returns just its conclusion</button><button class="q-opt" data-i="2">Never — it's unsafe</button></div><div class="q-exp">Sub-agents partition work that won't fit one context; the parent gets the distilled result, not the whole transcript.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q11</div><div class="q-text">Why is the system prompt described as 'infrastructure, not prose'?</div><div class="q-opts"><button class="q-opt" data-i="0">It should rhyme</button><button class="q-opt" data-i="1">The harness assembles it every turn from tools, rules, state and mode — treat it like code</button><button class="q-opt" data-i="2">It is never sent to the model</button></div><div class="q-exp">It's the operating manual the harness builds programmatically, not a static personality blurb.</div></div><div class="quiz-q" data-correct="1"><div class="q-num">Q12</div><div class="q-text">pi (pi.dev) is notable among harnesses mainly for…</div><div class="q-opts"><button class="q-opt" data-i="0">Being the largest</button><button class="q-opt" data-i="1">Its deliberately minimal surface — extensions + models.json, model-agnostic</button><button class="q-opt" data-i="2">Requiring a GPU cluster</button></div><div class="q-exp">pi is the proof a real harness can be small: a tiny core plus extensions, any model behind models.json.</div></div></div>
+</div>
+</div></main>
+</div>
+<div class="search-modal" id="search-modal"><div class="search-box">
+  <input id="search-input" placeholder="Search articles, terms, kernels…" autocomplete="off">
+  <div id="search-results"></div>
+  <div class="search-hint">↑↓ to navigate · ↵ to open · esc to close</div>
+</div></div>
+<script>window.SEARCH_BASE="";</script>
+<script src="assets/app.js"></script>
+</body></html>
