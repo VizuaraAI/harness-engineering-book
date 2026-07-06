@@ -1,0 +1,117 @@
+<!doctype html><html lang="en" data-theme="terminal"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tool safety: permission gates, protected paths, trust · Harness Engineering</title>
+<meta name="description" content="Build the layer that turns a model into an agent. A pi-style coding harness, from scratch.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/app.css">
+</head><body class="canvas-paper has-sb">
+<div class="topbar">
+  <a class="brand" href="../index.html"><img class="brand-mark" src="../assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>Harness&nbsp;Engineering</b></span></a>
+  <nav class="topnav"><a class="tn" href="../book.html">The Book</a><a class="tn active" href="../s/pi.html">Pi</a><a class="tn" href="../workshop.html">Workshop</a><a class="tn" href="../projects.html">Projects</a><a class="tn" href="../interactive.html">Interactive</a><a class="tn" href="../mentor/index.html">Mentor Guide</a></nav>
+  <button class="menu-btn" onclick="document.body.classList.toggle(&#39;sb-open&#39;)">☰</button>
+  <div class="top-links">
+    <button class="tbtn icon" id="search-open" title="Search (⌘K)">⌘K</button>
+    <button class="tbtn" id="theme-btn">Terminal</button>
+    <a class="tbtn enroll" href="../workshop.html">Enroll →</a>
+  </div>
+</div>
+<div class="layout">
+<nav class="sidebar" id="sidebar"><a class="sb-home" href="../s/pi.html">‹ Pi from scratch</a><details class="sb-sec" open><summary><span class="sb-num">06</span> Pi from Scratch</summary><a class="sb-item" href="../a/pi-how-it-all-fits.html">Pi from scratch: the plan<span class="chip">START</span></a><a class="sb-item" href="../a/pi-from-chat-to-agent.html">The loop: from a chat call to an agent<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-toolbox.html">The toolbox: giving Pi hands<span class="chip">BUILD</span></a><a class="sb-item active" href="../a/pi-tool-safety.html">Tool safety: permission gates, protected paths, trust<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-system-prompt.html">The system prompt: how Pi tells the model who it is<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-execution-environment.html">The execution environment: local, SSH, sandboxed<span class="chip">BUILD</span></a><a class="sb-item" href="../a/how-pi-manages-context.html">How Pi manages context (not 'the last three messages')<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-does-cache-control.html">How Pi does cache control: the rolling breakpoint<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-truncates-tool-output.html">Does Pi serve the agent everything? (No, it truncates)<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-does-subagents.html">How Pi does subagents: three mechanisms, three scales<span class="chip">DEEP</span></a><a class="sb-item" href="../a/pi-surfaces.html">Surfaces: one headless core, four front-ends<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-extensibility.html">Extensibility: everything is an extension<span class="chip">BUILD</span></a></details></nav>
+<main class="content"><article class="worklog">
+<div class="art-kicker"><span class="art-sec">06 · Pi from Scratch</span></div>
+<h1 class="art-title">Tool safety: permission gates, protected paths, trust <span class="chip lg">BUILD</span></h1>
+<div class="art-body"><p>The last chapter handed the model a real toolbox — <a href="pi-the-toolbox.html" target="_blank" rel="noopener">read, write, edit, bash and the rest</a> — and that toolbox is exactly as dangerous as it is useful. Here is the moment where you feel it. You ask Pi to "clean up the build artifacts," it thinks for a beat, and it decides the cleanest way to do that is <code>rm -rf</code> on a directory you did not mean. Nothing in the loop stops it. The model asked for <code>bash</code>, the harness ran <code>bash</code>, the files are gone. That single heartbeat — between <em>the model asked</em> and <em>the machine did</em> — is where this whole chapter lives.</p>
+<p>So the question this layer answers is narrow and sharp: <strong>who gets to say "no" in that heartbeat, and how?</strong> Pi's answer is not a wall of if-statements buried inside the bash tool. It is a hook. Every tool call passes through an event <em>before</em> it executes, and anyone — an extension you wrote in ten lines — can listen and veto. Let me show you the real mechanism.</p>
+<h2 id="the-gate-tool-call-fires-before-anything-runs">The gate: <code>tool_call</code> fires before anything runs</h2>
+<p>Recall from <a href="pi-how-it-all-fits.html" target="_blank" rel="noopener">how it all fits</a> that Pi's core emits lifecycle events an extension can subscribe to with <code>pi.on(...)</code>. Most of them are notifications: "a turn started," "a message ended." Two of them are different — they are <em>blockable</em>. The one that matters here is <code>tool_call</code>, and it fires in the gap we just described: the model has requested a tool, the arguments are resolved, but the tool has <strong>not run yet</strong>.</p>
+<p>An extension listens like this. Here is Pi's own permission gate, <code>examples/extensions/permission-gate.ts</code>, in full — it is barely twenty lines of logic:</p>
+<pre class="code" data-lang="ts"><code>export default function (pi: ExtensionAPI) {
+  const dangerousPatterns = [/\brm\s+(-rf?|--recursive)/i, /\bsudo\b/i, /\b(chmod|chown)\b.*777/i];
+
+  pi.on("tool_call", async (event, ctx) =&gt; {
+    if (event.toolName !== "bash") return undefined;
+
+    const command = event.input.command as string;
+    const isDangerous = dangerousPatterns.some((p) =&gt; p.test(command));
+
+    if (isDangerous) {
+      if (!ctx.hasUI) {
+        return { block: true, reason: "Dangerous command blocked (no UI for confirmation)" };
+      }
+      const choice = await ctx.ui.select(`⚠️ Dangerous command:\n\n  ${command}\n\nAllow?`, ["Yes", "No"]);
+      if (choice !== "Yes") {
+        return { block: true, reason: "Blocked by user" };
+      }
+    }
+    return undefined;
+  });
+}</code></pre>
+<p>Read the shape of it, because the shape <em>is</em> the design. The handler receives an <code>event</code> describing the pending call — <code>event.toolName</code>, <code>event.input</code> — and a <code>ctx</code> describing the situation. It returns one of two things. Return <code>undefined</code> and the call proceeds untouched. Return <code>{ block: true, reason }</code> and the tool never runs; the model gets the reason back as the tool result and has to try something else.<label for="sn-pi-tool-safety-1" class="sn-ref">1</label><input type="checkbox" id="sn-pi-tool-safety-1" class="sn-toggle"><span class="sidenote"><sup>1</sup> The blocked tool result is not a crash. It flows back into the message array like any other observation, so the model <em>reads</em> "Blocked by user" and adapts — often by proposing a safer command. The gate teaches, it doesn't just punish.</span></p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-tool-safety-1.png" alt="The tool_call gate: every tool request passes through a blockable event before it executes. Return undefined to allow, r" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-tool-safety-1.png"><span class="fig-ph">figure rendering &middot; The tool_call gate: every tool request passes through a blockable even</span></div><figcaption>The tool_call gate: every tool request passes through a blockable event before it executes. Return undefined to allow, return block+reason to veto — and the reason flows back to the model.</figcaption></figure>
+<p>Notice <code>ctx.hasUI</code>. This is the difference between running Pi at your terminal and running it in CI or a script with no human watching. When there <em>is</em> a UI, the gate asks you: <code>ctx.ui.select(...)</code> pops the choice and waits. When there is <strong>not</strong> — <code>!ctx.hasUI</code> — there is nobody to ask, so the safe default is to <em>block</em>. A dangerous command in an unattended pipeline dies rather than gambling. That asymmetry is the correct instinct baked into policy.</p>
+<h2 id="the-subtle-power-event-input-is-mutable">The subtle power: <code>event.input</code> is mutable</h2>
+<p>Blocking is the blunt tool. There is a sharper one hiding in that <code>event</code>. The input the model proposed is not read-only — <strong>you can mutate it in place</strong>, and the tool then runs with your patched arguments, <em>without re-validation</em>.</p>
+<p>Think about what that buys you. You do not have to reject a command wholesale; you can <em>fix</em> it. An extension could rewrite a bare <code>rm -rf ./cache</code> to <code>rm -rf ./cache --preserve-root</code>, or inject a <code>--dry-run</code> flag, or rewrite a path to stay inside the project, and let the call proceed with the safer version.<label for="sn-pi-tool-safety-2" class="sn-ref">2</label><input type="checkbox" id="sn-pi-tool-safety-2" class="sn-toggle"><span class="sidenote"><sup>2</sup> "No re-validation" is a deliberate trust boundary, and a footgun if you are careless: the schema check already happened, so whatever you write into <code>event.input</code> is taken at face value. The gate assumes the extension author knows what they are doing — mutate carefully.</span> The gate is not just a bouncer; it is an editor. Return <code>undefined</code> after mutating, and the model never knows its arguments were quietly improved.</p>
+<h2 id="protected-paths-the-same-hook-a-different-policy">Protected paths: the same hook, a different policy</h2>
+<p>Once you see that <code>tool_call</code> is a general veto point, every other safety feature is just a <em>different listener on the same event</em>. Pi ships a second one, <code>protected-paths.ts</code>, and it is worth putting side by side with the first to feel the pattern:</p>
+<pre class="code" data-lang="ts"><code>export default function (pi: ExtensionAPI) {
+  const protectedPaths = [".env", ".git/", "node_modules/"];
+
+  pi.on("tool_call", async (event, ctx) =&gt; {
+    if (event.toolName !== "write" &amp;&amp; event.toolName !== "edit") return undefined;
+
+    const path = event.input.path as string;
+    const isProtected = protectedPaths.some((p) =&gt; path.includes(p));
+
+    if (isProtected) {
+      if (ctx.hasUI) ctx.ui.notify(`Blocked write to protected path: ${path}`, "warning");
+      return { block: true, reason: `Path "${path}" is protected` };
+    }
+    return undefined;
+  });
+}</code></pre>
+<p>Same hook. Same return contract. Different question: instead of "is this command dangerous?" it asks "is this file off-limits?" — and it guards <code>write</code> and <code>edit</code> rather than <code>bash</code>. No agent should quietly rewrite your <code>.env</code> full of secrets, blow away your <code>.git/</code> history, or edit files under <code>node_modules/</code>. So this gate blocks writes and edits to those paths outright.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-tool-safety-2.png" alt="The same blockable event powers every gate. Each policy is a tiny independent listener; you stack as many as you need, a" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-tool-safety-2.png"><span class="fig-ph">figure rendering &middot; The same blockable event powers every gate. Each policy is a tiny inde</span></div><figcaption>The same blockable event powers every gate. Each policy is a tiny independent listener; you stack as many as you need, and they compose.</figcaption></figure>
+<p>This is the design worth internalising: <strong>safety is policy expressed as hooks around tool execution.</strong> It is not welded into the tools. It sits <em>outside</em> them, in plain sight, in files you can read, edit, delete, or write from scratch. Two shipped examples, but the mechanism is yours.</p>
+<h2 id="trust-one-level-up-should-this-repo-s-own-code-even-run">Trust, one level up: should this repo's own code even run?</h2>
+<p>The gates above assume the <em>model</em> is the thing you are guarding against. But there is an earlier, sneakier threat. Pi is extensible — a project can carry its own extensions in <code>.pi/extensions/</code>, its own skills, its own <code>AGENTS.md</code> that shapes the system prompt (see <a href="pi-the-system-prompt.html" target="_blank" rel="noopener">the system prompt</a>). The instant you open a cloned repo you did not write, all of <em>that</em> is code and instructions the harness is about to load and honor. A malicious <code>.pi/extensions/*.ts</code> could register a tool that exfiltrates your keys before you have typed a single word.</p>
+<p>So Pi puts a gate <em>before the gates</em>. Its name is <strong>project trust</strong>, and it is resolved at startup, in <code>core/project-trust.ts</code>. There is a dedicated startup event, <code>project_trust {cwd}</code>, and — this is the whole point — it is resolved <strong>before project-local extensions, skills, and <code>AGENTS.md</code> are loaded</strong>. The decision is a small enum: <code>yes</code>, <code>no</code>, or <code>undecided</code>, with an optional <em>remember</em> flag so you are only asked once per folder.</p>
+<p>Here is the ordering, straight from <code>resolveProjectTrusted</code>:</p>
+<pre class="code" data-lang="ts"><code>if (!hasTrustRequiringProjectResources(options.cwd)) {
+  return true;                        // nothing project-local to trust → skip the prompt
+}
+// ...ask an extension's project_trust handler, or the trust store, or the user...
+if (!options.projectTrustContext.hasUI) {
+  return false;                       // unattended + undecided → do NOT trust
+}
+const selected = await selectProjectTrustOption(options.cwd, options.projectTrustContext);</code></pre>
+<p>Trace the safety instincts in that code. If the folder has no project-local resources to trust, there is nothing to gate — proceed. If there is, and there is no human to ask (<code>!hasUI</code>), the answer is <strong>no</strong>: an unattended Pi will not run a stranger's project code. Only with a human present does it prompt, offering choices like "Trust and remember," "Trust this session," or "Do not trust this session," and it records the answer if you asked it to.<label for="sn-pi-tool-safety-3" class="sn-ref">3</label><input type="checkbox" id="sn-pi-tool-safety-3" class="sn-toggle"><span class="sidenote"><sup>3</sup> The <code>undecided</code> return is what lets multiple <code>project_trust</code> handlers cooperate — one extension can defer to another, or to the built-in prompt, by declining to decide. Same additive spirit as the tool gates, one layer up.</span></p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-tool-safety-3.png" alt="Project trust runs before any project-local extension, skill, or AGENTS.md is loaded. Decide yes and the repo's code act" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-tool-safety-3.png"><span class="fig-ph">figure rendering &middot; Project trust runs before any project-local extension, skill, or AGENT</span></div><figcaption>Project trust runs before any project-local extension, skill, or AGENTS.md is loaded. Decide yes and the repo's code activates; decide no (the unattended default) and it stays inert.</figcaption></figure>
+<p>Sit with why the <em>ordering</em> is the security property. If trust were checked after loading, the malicious extension would already have run its top-level code. Resolving <code>project_trust</code> first means an untrusted repo's own code never gets a single instruction executed. It is the difference between checking IDs at the door and checking them after the party.</p>
+<h2 id="the-blast-radius-when-a-no-isn-t-enough">The blast radius: when a "no" isn't enough</h2>
+<p>Pattern-matching gates are honest about their limits. <code>rm -rf</code> matches, but <code>rm  -rf</code> with a rogue alias, or a base64-encoded payload piped into <code>bash</code>, might not. For commands you <em>do</em> want to allow but not fully trust, Pi offers a heavier instrument: an OS-level <strong>sandbox</strong>, in <code>examples/extensions/sandbox/</code>. This is the "blast radius" idea — not "can this run?" but "if it runs and misbehaves, how far can the damage reach?"</p>
+<p>The sandbox extension wraps bash execution with <code>SandboxManager.wrapWithSandbox(command)</code> from <code>@anthropic-ai/sandbox-runtime</code>, which on macOS drops down to <code>sandbox-exec</code> and on Linux to <code>bubblewrap</code> — real OS-enforced confinement, not a regex.<label for="sn-pi-tool-safety-4" class="sn-ref">4</label><input type="checkbox" id="sn-pi-tool-safety-4" class="sn-toggle"><span class="sidenote"><sup>4</sup> This is the same <code>Operations</code>-injection idea from <a href="pi-the-execution-environment.html" target="_blank" rel="noopener">the execution environment</a>: the sandbox supplies a <code>createSandboxedBashOps()</code> whose <code>exec</code> wraps every command, so the <code>bash</code> tool is unchanged — the <em>backend</em> running the command is what got confined.</span> It reads allow/deny lists from <code>~/.pi/agent/extensions/sandbox.json</code> (global) and <code>.pi/sandbox.json</code> (project), merged with the project taking precedence. The defaults tell you exactly what a coding agent should and shouldn't touch:</p>
+<pre class="code" data-lang="ts"><code>filesystem: {
+  denyRead: ["~/.ssh", "~/.aws", "~/.gnupg"],
+  allowWrite: [".", "/tmp"],
+  denyWrite: [".env", ".env.*", "*.pem", "*.key"],
+},
+network: { allowedDomains: ["registry.npmjs.org", "github.com", "*.github.com", /* … */], deniedDomains: [] },</code></pre>
+<p>Even if the model runs the worst command it can compose, the process simply cannot read your SSH keys, cannot write outside the project and <code>/tmp</code>, and cannot phone home to a domain not on the list. The veto gate says <em>no, you may not</em>; the sandbox says <em>fine, try — you'll hit walls</em>. Together they are defense in layers.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-tool-safety-4.png" alt="Two complementary layers: the gate prevents a call from running at all, the sandbox contains a call that does run so its" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-tool-safety-4.png"><span class="fig-ph">figure rendering &middot; Two complementary layers: the gate prevents a call from running at all</span></div><figcaption>Two complementary layers: the gate prevents a call from running at all, the sandbox contains a call that does run so its blast radius stays small.</figcaption></figure>
+<h2 id="what-this-layer-bought-you">What this layer bought you</h2>
+<p>Step back and look at what Pi actually built here, because it is a single idea worn four ways. There is one heartbeat between <em>asked</em> and <em>ran</em>, and Pi made that heartbeat a public, blockable event. Everything else is a listener: the permission gate reads bash commands, the protected-paths gate reads write targets, project trust gates the repo's own code before it loads, and the sandbox contains whatever slips through. None of it is hidden inside a tool. All of it is a few dozen lines you can read and rewrite.</p>
+<p>That is the payoff of "safety as policy, not plumbing." The naive harness ran the model's every request on faith. Pi's harness inserts <em>you</em> — or your twenty-line extension — into the one gap that matters, and lets you compose as many policies as the situation demands. What it does <strong>not</strong> hard-code is which policies you want; that is left to extensions, exactly as it should be.</p>
+<p>The loop can now act without acting recklessly. Next we look at the words that shape <em>how</em> it acts in the first place — <a href="pi-the-system-prompt.html" target="_blank" rel="noopener">the system prompt</a>, the infrastructure Pi assembles before the model has said anything at all.</p></div>
+<div class="prevnext"><a class="pn prev" href="pi-the-toolbox.html"><span>‹ previous</span>The toolbox: giving Pi hands</a><a class="pn next" href="pi-the-system-prompt.html"><span>next ›</span>The system prompt: how Pi tells the model who it is</a></div>
+</article></main>
+</div>
+<div class="search-modal" id="search-modal"><div class="search-box">
+  <input id="search-input" placeholder="Search articles, terms, kernels…" autocomplete="off">
+  <div id="search-results"></div>
+  <div class="search-hint">↑↓ to navigate · ↵ to open · esc to close</div>
+</div></div>
+<script>window.SEARCH_BASE="../";</script>
+<script src="../assets/app.js"></script>
+</body></html>

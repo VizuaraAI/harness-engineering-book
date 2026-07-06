@@ -31,6 +31,9 @@ for sec in MAN["sections"]:
     for a in sec["articles"]:
         FLAT.append({**a, "section_id": sec["id"], "section_num": sec["num"], "section_title": sec["title"]})
 SLUG2IDX = {a["slug"]: i for i, a in enumerate(FLAT)}
+PI_SECTION_ID = "pi"
+PI_FLAT = [a for a in FLAT if a["section_id"] == PI_SECTION_ID]
+BOOK_FLAT = [a for a in FLAT if a["section_id"] != PI_SECTION_ID]
 
 # ============================================================ markdown
 def esc(s): return html.escape(s, quote=False)
@@ -175,9 +178,17 @@ def md_to_html(md, slug):
     return "\n".join(out)
 
 # ============================================================ shell
-def sidebar(active_slug, rel):
-    rows = [f'<a class="sb-home" href="{rel}index.html">‹ kernel engineering</a>']
+def sidebar(active_slug, rel, kind="book"):
+    if kind == "pi":
+        rows = [f'<a class="sb-home" href="{rel}s/pi.html">‹ Pi from scratch</a>']
+    else:
+        rows = [f'<a class="sb-home" href="{rel}book.html">‹ the book</a>']
     for sec in MAN["sections"]:
+        is_pi = sec["id"] == PI_SECTION_ID
+        if kind == "book" and is_pi:
+            continue
+        if kind == "pi" and not is_pi:
+            continue
         open_sec = any(a["slug"] == active_slug for a in sec["articles"])
         rows.append(f'<details class="sb-sec"{" open" if open_sec else ""}>')
         rows.append(f'<summary><span class="sb-num">{sec["num"]}</span> {esc(sec["title"])}</summary>')
@@ -192,11 +203,15 @@ def shell(title, main_html, active_slug=None, rel="", canvas="dark", extra_head=
           with_sidebar=False, active_nav="", sb_kind="book"):
     def nl(href, label, key):
         return f'<a class="tn{" active" if key==active_nav else ""}" href="{rel}{href}">{label}</a>'
-    topnav = (nl("book.html", "The Book", "book") + nl("workshop.html", "Workshop", "workshop")
+    topnav = (nl("book.html", "The Book", "book") + nl("s/pi.html", "Pi", "pi")
+              + nl("workshop.html", "Workshop", "workshop")
               + nl("projects.html", "Projects", "projects") + nl("interactive.html", "Interactive", "interactive")
               + nl("mentor/index.html", "Mentor Guide", "mentor"))
     if with_sidebar:
-        sb = mentor_sidebar(active_slug, rel) if sb_kind == "mentor" else sidebar(active_slug, rel)
+        if sb_kind == "mentor":
+            sb = mentor_sidebar(active_slug, rel)
+        else:
+            sb = sidebar(active_slug, rel, kind=("pi" if sb_kind == "pi" else "book"))
     else:
         sb = ""
     layout_cls = "layout" if with_sidebar else "layout nosb"
@@ -209,7 +224,7 @@ def shell(title, main_html, active_slug=None, rel="", canvas="dark", extra_head=
 <link rel="stylesheet" href="{rel}assets/app.css">{extra_head}
 </head><body class="canvas-{canvas}{' has-sb' if with_sidebar else ''}">
 <div class="topbar">
-  <a class="brand" href="{rel}index.html"><img class="brand-mark" src="{rel}assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>Kernel&nbsp;Engineering</b></span></a>
+  <a class="brand" href="{rel}index.html"><img class="brand-mark" src="{rel}assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>{esc(SITE['title']).replace(' ', '&nbsp;')}</b></span></a>
   <nav class="topnav">{topnav}</nav>
   {'<button class="menu-btn" onclick="document.body.classList.toggle(&#39;sb-open&#39;)">☰</button>' if with_sidebar else ''}
   <div class="top-links">
@@ -258,8 +273,11 @@ def build_article(a, idx):
 <div class="art-body">{body}</div>
 {nav}
 </article>"""
+    is_pi = a.get("section_id") == PI_SECTION_ID
     html_out = shell(f"{a['title']} · {SITE['title']}", art, active_slug=slug, rel="../",
-                     canvas="paper", with_sidebar=True, active_nav="book")
+                     canvas="paper", with_sidebar=True,
+                     active_nav="pi" if is_pi else "book",
+                     sb_kind="pi" if is_pi else "book")
     (DOCS / "a" / f"{slug}.html").write_text(html_out)
 
 def build_section(sec, rel="../"):
@@ -277,18 +295,23 @@ def build_section(sec, rel="../"):
 <p class="sec-blurb">{esc(sec['blurb'])}</p>
 <div class="idx-list">{''.join(cards)}</div>
 </div>"""
+    is_pi = sec["id"] == PI_SECTION_ID
     html_out = shell(f"{sec['title']} · {SITE['title']}", main, rel=rel, canvas="dark",
-                     with_sidebar=True, active_nav="book")
+                     with_sidebar=True,
+                     active_nav="pi" if is_pi else "book",
+                     sb_kind="pi" if is_pi else "book")
     (DOCS / "s" / f"{sec['id']}.html").write_text(html_out)
 
 AREAS = [
     ("book.html", "01", "The Book", "The full knowledge base — an illustrated worklog that builds a coding-agent harness from scratch, in the spirit of pi: the loop, tools, context engine, durability and orchestration.",
-     f"{len(FLAT)} chapters"),
-    ("workshop.html", "02", "The Workshop", "Vizuara's five-day live Harness Engineering cohort. Each day builds one layer of your own pi-style harness, with the full book included.",
+     f"{len(BOOK_FLAT)} chapters"),
+    ("s/pi.html", "02", "Pi from Scratch", "How the real pi coding agent (earendil-works/pi) actually works, built up one layer at a time from its own source — the loop, toolbox, safety, system prompt, execution env, context, cache, subagents, surfaces and extensions.",
+     f"{len(PI_FLAT)} chapters"),
+    ("workshop.html", "03", "The Workshop", "Vizuara's five-day live Harness Engineering cohort. Each day builds one layer of your own pi-style harness, with the full book included.",
      "5 days · 5 layers"),
-    ("projects.html", "03", "Projects", "Build it with your hands — the bare loop, real file & shell tools, a context engine that compacts and remembers, checkpointed recovery, and your own harness capstone.",
+    ("projects.html", "04", "Projects", "Build it with your hands — the bare loop, real file & shell tools, a context engine that compacts and remembers, checkpointed recovery, and your own harness capstone.",
      "guided builds"),
-    ("interactive.html", "04", "Interactive", "Practice, not just read: per-section quizzes on the loop, tools, context, durability and orchestration.",
+    ("interactive.html", "05", "Interactive", "Practice, not just read: per-section quizzes on the loop, tools, context, durability and orchestration.",
      "quizzes"),
 ]
 
@@ -337,7 +360,7 @@ def build_workshop():
     main = f"""<div class="section-page workshop">
 <div class="crumb">/ the-workshop</div>
 <h1 class="sec-h1">The Harness Engineering Workshop</h1>
-<p class="sec-blurb">Five live mornings. Each day builds one layer of your own coding harness, in the spirit of <a href="https://pi.dev" target="_blank" rel="noopener">pi</a> — from a bare loop to a durable, orchestrated agent you demo on Friday. Enrolled students get the complete {len(FLAT)}-chapter <a href="book.html">book</a>, the <a href="interactive.html">quizzes</a>, and the <a href="projects.html">guided build projects</a>.</p>
+<p class="sec-blurb">Five live mornings. Each day builds one layer of your own coding harness, in the spirit of <a href="https://pi.dev" target="_blank" rel="noopener">pi</a> — from a bare loop to a durable, orchestrated agent you demo on Friday. Enrolled students get the complete {len(BOOK_FLAT)}-chapter <a href="book.html">book</a>, the <a href="interactive.html">quizzes</a>, and the <a href="projects.html">guided build projects</a>.</p>
 <h2 class="ws-h2">5 live days <span class="ws-sub">one layer per day · 7:00–9:00 AM IST</span></h2>
 <div class="lec-grid">{day_html}</div>
 <div class="ws-cta">
@@ -351,6 +374,8 @@ def build_workshop():
 def build_book():
     chapters = []
     for sec in MAN["sections"]:
+        if sec["id"] == PI_SECTION_ID:
+            continue
         arts = "".join(
             f'<a href="a/{a["slug"]}.html" class="ch-art">{esc(a["title"])}'
             + (f'<span class="chip">{esc(a["chip"])}</span>' if a["chip"] else "") + '</a>'
@@ -364,7 +389,7 @@ def build_book():
     main = f"""<div class="section-page book-page">
 <div class="crumb">/ the-book</div>
 <h1 class="sec-h1">The Harness Engineering Book</h1>
-<p class="sec-blurb">The complete knowledge base behind Vizuara's Harness Engineering — {len(FLAT)} illustrated chapters that build a coding-agent harness from scratch, in the spirit of pi. Each is written from first principles and cross-linked to the chapters it needs. Start anywhere.</p>
+<p class="sec-blurb">The complete knowledge base behind Vizuara's Harness Engineering — {len(BOOK_FLAT)} illustrated chapters that build a coding-agent harness from scratch, in the spirit of pi. Each is written from first principles and cross-linked to the chapters it needs. Start anywhere.</p>
 <a class="btn" href="a/how-to-use-this-site.html" style="margin-bottom:8px;display:inline-block">How to read this book →</a>
 <div class="chapters">{''.join(chapters)}</div>
 </div>"""

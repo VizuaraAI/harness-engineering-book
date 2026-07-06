@@ -1,0 +1,128 @@
+<!doctype html><html lang="en" data-theme="terminal"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The execution environment: local, SSH, sandboxed · Harness Engineering</title>
+<meta name="description" content="Build the layer that turns a model into an agent. A pi-style coding harness, from scratch.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/app.css">
+</head><body class="canvas-paper has-sb">
+<div class="topbar">
+  <a class="brand" href="../index.html"><img class="brand-mark" src="../assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>Harness&nbsp;Engineering</b></span></a>
+  <nav class="topnav"><a class="tn" href="../book.html">The Book</a><a class="tn active" href="../s/pi.html">Pi</a><a class="tn" href="../workshop.html">Workshop</a><a class="tn" href="../projects.html">Projects</a><a class="tn" href="../interactive.html">Interactive</a><a class="tn" href="../mentor/index.html">Mentor Guide</a></nav>
+  <button class="menu-btn" onclick="document.body.classList.toggle(&#39;sb-open&#39;)">☰</button>
+  <div class="top-links">
+    <button class="tbtn icon" id="search-open" title="Search (⌘K)">⌘K</button>
+    <button class="tbtn" id="theme-btn">Terminal</button>
+    <a class="tbtn enroll" href="../workshop.html">Enroll →</a>
+  </div>
+</div>
+<div class="layout">
+<nav class="sidebar" id="sidebar"><a class="sb-home" href="../s/pi.html">‹ Pi from scratch</a><details class="sb-sec" open><summary><span class="sb-num">06</span> Pi from Scratch</summary><a class="sb-item" href="../a/pi-how-it-all-fits.html">Pi from scratch: the plan<span class="chip">START</span></a><a class="sb-item" href="../a/pi-from-chat-to-agent.html">The loop: from a chat call to an agent<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-toolbox.html">The toolbox: giving Pi hands<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-tool-safety.html">Tool safety: permission gates, protected paths, trust<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-system-prompt.html">The system prompt: how Pi tells the model who it is<span class="chip">BUILD</span></a><a class="sb-item active" href="../a/pi-the-execution-environment.html">The execution environment: local, SSH, sandboxed<span class="chip">BUILD</span></a><a class="sb-item" href="../a/how-pi-manages-context.html">How Pi manages context (not 'the last three messages')<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-does-cache-control.html">How Pi does cache control: the rolling breakpoint<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-truncates-tool-output.html">Does Pi serve the agent everything? (No, it truncates)<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-does-subagents.html">How Pi does subagents: three mechanisms, three scales<span class="chip">DEEP</span></a><a class="sb-item" href="../a/pi-surfaces.html">Surfaces: one headless core, four front-ends<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-extensibility.html">Extensibility: everything is an extension<span class="chip">BUILD</span></a></details></nav>
+<main class="content"><article class="worklog">
+<div class="art-kicker"><span class="art-sec">06 · Pi from Scratch</span></div>
+<h1 class="art-title">The execution environment: local, SSH, sandboxed <span class="chip lg">BUILD</span></h1>
+<div class="art-body"><p>The <a href="pi-the-toolbox.html" target="_blank" rel="noopener">toolbox chapter</a> left a question hanging that is easy to skate past. Pi's <code>read</code> tool reads a file; its <code>bash</code> tool runs a command. But <em>reads a file on which machine? Runs a command in whose shell?</em> We watched the tools produce results, and quietly assumed the answer was "on your laptop, in your shell." That assumption is wired into a normal agent so deeply that you cannot pull it back out. Pi refuses to bake it in — and this chapter is about the two layers it uses to keep the wiring loose.</p>
+<p>The payoff is a single, slightly startling capability: the <em>same</em> <code>read</code>, the <em>same</em> <code>bash</code>, the <em>same</em> <code>edit</code>, run against three completely different backends — your local disk, a remote host over SSH, or an OS-level sandbox — and not one line of the tool changes. To get there, Pi separates <strong>what</strong> a tool does from <strong>where</strong> it runs. Let me show you both halves of that separation, then watch a real extension flip the backend out from under a live tool.</p>
+<h2 id="the-problem-run-this-command-hides-a-choice">The problem: "run this command" hides a choice</h2>
+<p>Go back to the naked bash tool from <a href="your-first-bare-harness.html" target="_blank" rel="noopener">your first bare harness</a>. It ran a command with <code>subprocess.run(cmd, shell=True)</code>. That one line is a commitment: commands run <em>here</em>, in <em>this</em> process's shell, on <em>this</em> filesystem. If you later want the agent to operate on a remote build server, or inside a jail that can't touch your home directory, you have nowhere to stand — the "where" is soldered to the "what."</p>
+<p>Pi's answer is to name the "where" as a thing you can pass around. Two layers do this, at two altitudes: a harness-wide capability called <code>ExecutionEnv</code>, and a per-tool injection called <em>operations</em>. We'll take them in that order.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-the-execution-environment-1.png" alt="A naive tool solders the execution location into the command call. Pi's whole design here is about unsoldering it." loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-the-execution-environment-1.png"><span class="fig-ph">figure rendering &middot; A naive tool solders the execution location into the command call. Pi'</span></div><figcaption>A naive tool solders the execution location into the command call. Pi's whole design here is about unsoldering it.</figcaption></figure>
+<h2 id="layer-1-executionenv-the-harness-s-file-and-process-backend">Layer 1: <code>ExecutionEnv</code> — the harness's file-and-process backend</h2>
+<p>At the harness level, every file touch and every process spawn goes through one interface: <code>ExecutionEnv</code>, defined in <code>packages/agent/src/harness/types.ts</code>. It is nothing exotic — it is literally two smaller capabilities glued together:</p>
+<pre class="code" data-lang="typescript"><code>export interface ExecutionEnv extends FileSystem, Shell {}</code></pre>
+<p><code>FileSystem</code> is the file half — <code>readTextFile</code>, <code>readBinaryFile</code>, <code>writeFile</code>, <code>appendFile</code>, <code>listDir</code>, <code>fileInfo</code>, <code>canonicalPath</code>, <code>createDir</code>, <code>remove</code>, <code>createTempDir</code>, <code>createTempFile</code>, <code>cleanup</code>. <code>Shell</code> is the process half, and it is astonishingly small — one method that matters:</p>
+<pre class="code" data-lang="typescript"><code>export interface Shell {
+	exec(command: string, options?: ShellExecOptions):
+		Promise&lt;Result&lt;{ stdout: string; stderr: string; exitCode: number }, ExecutionError&gt;&gt;;
+	cleanup(): Promise&lt;void&gt;;
+}</code></pre>
+<p>That is the whole shape of "run a process" in Pi: hand it a command, get back <code>stdout</code>, <code>stderr</code>, and an <code>exitCode</code>. The default implementation is <code>NodeExecutionEnv</code> in <code>env/nodejs.ts</code> — it spawns real Node child processes and reads real files. But the harness only ever speaks to the <em>interface</em>, so you could hand it a different <code>ExecutionEnv</code> and it would never notice.<label for="sn-pi-the-execution-environment-1" class="sn-ref">1</label><input type="checkbox" id="sn-pi-the-execution-environment-1" class="sn-toggle"><span class="sidenote"><sup>1</sup> This is dependency inversion in its plainest form. The harness depends on the <em>idea</em> of a filesystem-and-shell, not on Node's <code>fs</code> and <code>child_process</code>. Naming the dependency as an interface is what makes it swappable later — the entire chapter is one long consequence of this one line.</span></p>
+<h2 id="the-error-model-failures-are-values-not-explosions">The error model: failures are values, not explosions</h2>
+<p>Before we go further, look again at the return types above. <code>exec</code> doesn't return <code>{stdout, stderr, exitCode}</code>. It returns <code>Result&lt;{stdout, stderr, exitCode}, ExecutionError&gt;</code>. That <code>Result</code> wrapper is not decoration — it is a deliberate law, and Pi enforces it in the interface's own doc comment: <em>"Operation methods must never throw or reject. All filesystem failures, including unexpected backend failures, must be encoded in the returned Result."</em></p>
+<p><code>Result</code> itself is four lines:</p>
+<pre class="code" data-lang="typescript"><code>export type Result&lt;TValue, TError&gt; =
+	| { ok: true; value: TValue }
+	| { ok: false; error: TError };</code></pre>
+<p>So every call comes back tagged. You check <code>result.ok</code>; if it's <code>true</code> you read <code>result.value</code>, if it's <code>false</code> you read <code>result.error</code> — a typed <code>FileError</code> (codes like <code>not_found</code>, <code>permission_denied</code>) or an <code>ExecutionError</code> (<code>timeout</code>, <code>aborted</code>, <code>spawn_error</code>). Nothing is thrown. A missing file is not a crash; it is a value that says "not found," which the caller must look at.</p>
+<p>Why does an execution-environment chapter care so much about error style? Because the backend is exactly where the ugly, unavoidable failures live — the disk is full, the SSH tunnel dropped, the sandbox denied the write. If any of those threw, a single bad file read could unwind the whole agent loop mid-turn. By making failure a value that travels <em>up through the same channel as success</em>, Pi guarantees the loop always gets a straight answer it can reason about, whether the backend is local, remote, or jailed.<label for="sn-pi-the-execution-environment-2" class="sn-ref">2</label><input type="checkbox" id="sn-pi-the-execution-environment-2" class="sn-toggle"><span class="sidenote"><sup>2</sup> The codebase keeps one escape hatch, <code>getOrThrow</code>, described in-source as "intended for tests and explicit adapter boundaries." So the rule isn't dogma — it's "never throw across the harness boundary," with a labelled door for the two places where throwing is actually clearer.</span></p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-the-execution-environment-2.png" alt="Pi's backend never throws across the harness boundary; every failure is returned as a typed Result the caller must inspe" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-the-execution-environment-2.png"><span class="fig-ph">figure rendering &middot; Pi's backend never throws across the harness boundary; every failure i</span></div><figcaption>Pi's backend never throws across the harness boundary; every failure is returned as a typed Result the caller must inspect. That is what keeps a bad file read from taking down the whole turn.</figcaption></figure>
+<h2 id="layer-2-per-tool-operations-swapping-the-backend-without-touching-the-tool">Layer 2: per-tool <em>operations</em> — swapping the backend without touching the tool</h2>
+<p><code>ExecutionEnv</code> swaps the backend for the <em>whole harness</em>. But Pi wants something finer: swap the backend <em>for one tool</em> — run <code>bash</code> remotely while <code>read</code> stays local, say. So each backend-touching tool takes a small injected object called its <strong>operations</strong>, and does all its I/O through that object instead of calling Node directly.</p>
+<p>For the bash tool, the contract is <code>BashOperations</code> in <code>packages/coding-agent/src/core/tools/bash.ts</code> — again, one method:</p>
+<pre class="code" data-lang="typescript"><code>export interface BashOperations {
+	exec: (command: string, cwd: string, options: {
+		onData: (data: Buffer) =&gt; void;
+		signal?: AbortSignal;
+		timeout?: number;
+		env?: NodeJS.ProcessEnv;
+	}) =&gt; Promise&lt;{ exitCode: number | null }&gt;;
+}</code></pre>
+<p>The default, <code>createLocalBashOperations()</code>, spawns a real child process on your machine. For the read tool, the parallel contract is <code>ReadOperations</code> in <code>tools/read.ts</code>:</p>
+<pre class="code" data-lang="typescript"><code>export interface ReadOperations {
+	readFile: (absolutePath: string) =&gt; Promise&lt;Buffer&gt;;
+	access: (absolutePath: string) =&gt; Promise&lt;void&gt;;
+	detectImageMimeType?: (absolutePath: string) =&gt; Promise&lt;string | null | undefined&gt;;
+}</code></pre>
+<p>with the default <code>defaultReadOperations</code> reading straight off the local disk. There are matching <code>WriteOperations</code>, <code>EditOperations</code>, and grep operations, each the same idea. The wiring is uniform: every tool factory ends with <code>const ops = options?.operations ?? createLocalBashOperations(...)</code>. Pass operations and it uses yours; pass nothing and it falls back to local.<label for="sn-pi-the-execution-environment-3" class="sn-ref">3</label><input type="checkbox" id="sn-pi-the-execution-environment-3" class="sn-toggle"><span class="sidenote"><sup>3</sup> Notice how thin these interfaces are. <code>BashOperations</code> is <em>one</em> function; <code>ReadOperations</code> is two-and-a-half. That thinness is the whole point — the smaller the contract a backend must satisfy, the more places you can plausibly implement it. A fat interface would be a fat barrier to writing an SSH backend.</span></p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-the-execution-environment-3.png" alt="Each backend-touching tool exposes an operations slot. The tool body is fixed; you decide where it runs by choosing whic" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-the-execution-environment-3.png"><span class="fig-ph">figure rendering &middot; Each backend-touching tool exposes an operations slot. The tool body i</span></div><figcaption>Each backend-touching tool exposes an operations slot. The tool body is fixed; you decide where it runs by choosing which operations object you plug in.</figcaption></figure>
+<h2 id="watch-it-happen-the-ssh-extension-flips-the-slot">Watch it happen: the SSH extension flips the slot</h2>
+<p>Now the payoff, and it is a real file you can read: <code>packages/coding-agent/examples/extensions/ssh.ts</code>. Run <code>pi -e ./ssh.ts --ssh user@host</code> and the agent's <code>read</code>, <code>write</code>, <code>edit</code>, and <code>bash</code> all execute <em>on the remote box</em>. The extension writes zero new tools. It only writes new operations.</p>
+<p>Here is its remote bash backend — the same <code>BashOperations</code> shape, implemented over the <code>ssh</code> command:</p>
+<pre class="code" data-lang="typescript"><code>function createRemoteBashOps(remote: string, remoteCwd: string, localCwd: string): BashOperations {
+	const toRemote = (p: string) =&gt; p.replace(localCwd, remoteCwd);
+	return {
+		exec: (command, cwd, { onData, signal, timeout }) =&gt;
+			new Promise((resolve, reject) =&gt; {
+				const cmd = `cd ${JSON.stringify(toRemote(cwd))} &amp;&amp; ${command}`;
+				const child = spawn("ssh", [remote, cmd], { stdio: ["ignore", "pipe", "pipe"] });
+				child.stdout.on("data", onData);
+				child.stderr.on("data", onData);
+				// ...timeout + abort handling, then:
+				child.on("close", (code) =&gt; resolve({ exitCode: code }));
+			}),
+	};
+}</code></pre>
+<p>Two things earn their keep. First, <code>spawn("ssh", [remote, cmd])</code> — instead of running locally, it hands the command to <code>ssh</code>, which runs it on the far machine and streams output back through the same <code>onData</code> callback the local backend uses. Second, <code>toRemote</code> — a <strong>path translation</strong> that rewrites the local working directory into the remote one, because a path that means something on your laptop means nothing on the server. The remote read backend is the same trick: <code>readFile</code> becomes <code>sshExec(remote, "cat ...")</code>, <code>access</code> a remote <code>test -r</code>, image sniffing a remote <code>file --mime-type</code>.</p>
+<p>And the wiring at registration is almost anticlimactic — the extension takes Pi's own local tools and swaps only the operations when an SSH target is set:</p>
+<pre class="code" data-lang="typescript"><code>pi.registerTool({
+	...localBash,
+	async execute(id, params, signal, onUpdate) {
+		const ssh = getSsh();
+		if (ssh) {
+			const tool = createBashTool(localCwd, {
+				operations: createRemoteBashOps(ssh.remote, ssh.remoteCwd, localCwd),
+			});
+			return tool.execute(id, params, signal, onUpdate);
+		}
+		return localBash.execute(id, params, signal, onUpdate);
+	},
+});</code></pre>
+<p>That <code>if (ssh) … else local</code> is the entire behavioural difference between "run on your laptop" and "run on a server three timezones away." The model never learns anything changed — it still just calls <code>bash</code>.</p>
+<h2 id="the-third-place-to-run-an-os-sandbox-same-slot">The third place to run: an OS sandbox, same slot</h2>
+<p>The remote case proves the pattern; the sandbox case proves it <em>generalises</em>. The sandbox extension (<code>examples/extensions/sandbox/index.ts</code>) fills the <em>exact same</em> <code>BashOperations</code> slot, but instead of shelling out to another machine it wraps each command in an OS-level jail:</p>
+<pre class="code" data-lang="typescript"><code>function createSandboxedBashOps(): BashOperations {
+	return {
+		async exec(command, cwd, { onData, signal, timeout }) {
+			const wrappedCommand = await SandboxManager.wrapWithSandbox(command);
+			const child = spawn("bash", ["-c", wrappedCommand], { cwd, /* ... */ });
+			// same onData streaming, same exitCode resolution
+		},
+	};
+}</code></pre>
+<p>It uses <code>@anthropic-ai/sandbox-runtime</code> — <code>sandbox-exec</code> on macOS — to enforce filesystem and network restrictions <em>at the OS level</em>, so a command the model runs physically cannot escape the box, no matter what it tries. Same interface, same <code>read</code>/<code>bash</code>/<code>edit</code> on the model's side. Three implementations of one slot: local, remote, sandboxed.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-the-execution-environment-4.png" alt="The same read/bash/edit tools fan out to three interchangeable backends through the operations slot: local child process" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-the-execution-environment-4.png"><span class="fig-ph">figure rendering &middot; The same read/bash/edit tools fan out to three interchangeable backend</span></div><figcaption>The same read/bash/edit tools fan out to three interchangeable backends through the operations slot: local child process, remote SSH host, or OS-level sandbox. WHAT is fixed; WHERE is a choice.</figcaption></figure>
+<h2 id="what-this-bought-us-and-what-it-opens">What this bought us, and what it opens</h2>
+<p>Step back and name the move, because it recurs everywhere in Pi. The tool owns the hard, reusable work: parsing arguments, streaming output, formatting results, honouring the abort signal and timeout. The <em>operations</em> own the one variable detail — which machine, which jail, which disk. Split those apart and the number of environments you support stops being a property of your tools and becomes a property of a small object you can write in an afternoon.<label for="sn-pi-the-execution-environment-4" class="sn-ref">4</label><input type="checkbox" id="sn-pi-the-execution-environment-4" class="sn-toggle"><span class="sidenote"><sup>4</sup> This is exactly why the SSH and sandbox files live under <code>examples/extensions/</code> rather than in the core. They <em>are</em> extensions — nothing in Pi's core knows SSH exists. It only knows there is an operations slot, and that anyone is allowed to fill it. We follow that thread in <a href="pi-extensibility.html" target="_blank" rel="noopener">Pi's extensibility model</a>.</span></p>
+<p>And notice the two layers now stack cleanly. <code>ExecutionEnv</code> is the harness's own floor — the filesystem-and-shell every internal subsystem stands on, with its never-throw <code>Result</code> discipline. Operations are the per-tool escape hatch layered on top, letting a single tool point somewhere else without disturbing the floor. Together they answer the question the toolbox chapter left open: the tools run wherever you point them, and pointing them somewhere new costs one small object, not a rewrite.</p>
+<p>That decoupling is a safety story as much as a flexibility story — an OS sandbox is, after all, a blast-radius control. But <em>deciding whether a given command is even allowed to run</em> is a different mechanism, one that sits in front of the operations slot rather than inside it. That is where we go next: <a href="pi-tool-safety.html" target="_blank" rel="noopener">how Pi keeps its tools safe</a>.</p></div>
+<div class="prevnext"><a class="pn prev" href="pi-the-system-prompt.html"><span>‹ previous</span>The system prompt: how Pi tells the model who it is</a><a class="pn next" href="how-pi-manages-context.html"><span>next ›</span>How Pi manages context (not 'the last three messages')</a></div>
+</article></main>
+</div>
+<div class="search-modal" id="search-modal"><div class="search-box">
+  <input id="search-input" placeholder="Search articles, terms, kernels…" autocomplete="off">
+  <div id="search-results"></div>
+  <div class="search-hint">↑↓ to navigate · ↵ to open · esc to close</div>
+</div></div>
+<script>window.SEARCH_BASE="../";</script>
+<script src="../assets/app.js"></script>
+</body></html>

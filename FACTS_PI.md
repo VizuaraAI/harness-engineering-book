@@ -169,3 +169,96 @@ Source: `packages/orchestrator/src/` (supervisor.ts, radius.ts, ipc/, rpc-proces
 Article framing: "one job too big for one context" has three answers in Pi, at three scales — a child process
 (subagent), a fresh thread (handoff), or a fleet of instances (orchestrator). Vercel Academy Module 6 covers only
 the first; Pi shows the whole ladder.
+
+# ============ FROM-SCRATCH BUILD CHAPTERS — ground truth (read from source) ============
+
+## MECHANISM 5 — THE LOOP (`packages/agent/src/agent-loop.ts` runLoop(), + agent.ts, harness/messages.ts)
+- The loop is `runLoop()`: an OUTER while(true) wrapping an INNER `while (hasMoreToolCalls || pendingMessages.length>0)`.
+  Each turn: emit `turn_start` → inject any steering messages → `streamAssistantResponse()` (streamed assistant
+  message with a `stopReason`) → if stopReason is `error`/`aborted`, end → extract tool calls
+  (`message.content.filter(c => c.type === "toolCall")`) → `executeToolCalls()` → append tool results → emit
+  `turn_end` → check stop conditions → poll steering; when the inner loop would stop, poll `getFollowUpMessages()`.
+- STOP CONDITIONS (there is NO hard max-turns): (1) assistant `stopReason === "error" | "aborted"`;
+  (2) `config.shouldStopAfterTurn?.()` returns true; (3) no more tool calls AND no pending/steering AND no
+  follow-up messages. Abort via an `AbortSignal` threaded through the whole chain → yields `stopReason:"aborted"`.
+- MESSAGE MODEL (`harness/messages.ts`, `types.ts`): roles are `user | assistant | toolResult` (from pi-ai) PLUS
+  harness custom messages `bashExecution | custom | branchSummary | compactionSummary`. A tool result is
+  `{ role:"toolResult", toolCallId, toolName, content, details, isError, timestamp }` — threaded back by matching
+  `toolCallId` to the assistant's `toolCall.id`.
+- STATE: the LOOP itself sees a FLAT array (`AgentContext.messages: AgentMessage[]`). The HARNESS
+  (`agent-harness.ts`) stores a **session TREE** of `SessionTreeEntry` nodes (this is what enables fork/clone and
+  branch navigation); `session.buildContext()` flattens the current branch to the array the loop consumes. Good
+  teaching line: "the loop is linear; the harness remembers a tree."
+- PHASES (`agent-harness.ts`): `idle → turn → idle`, plus `compaction` and `branch_summary`; a phase guard throws
+  "busy" if you prompt while not idle. Tool execution mode defaults to **parallel** (`Promise.all`), with a
+  sequential mode available; a batch can `terminate` the loop if every tool result says terminate.
+
+## MECHANISM 6 — THE TOOLBOX + TOOL SHAPE (`packages/coding-agent/src/core/tools/`)
+- Tools: `read, write, edit (edit-diff, file-mutation-queue), bash (bash-executor), grep, find, ls` + MCP tools.
+- A Pi tool definition = `{ name, label, description, parameters (TypeBox schema), execute(toolCallId, params,
+  signal, onUpdate, ctx), optional prepareArguments/renderCall/renderResult/executionMode }`. Descriptions are
+  long + instructional (read's tells the model to page with offset/limit). The description IS the model's API.
+
+## MECHANISM 7 — TOOL SAFETY (extensions hook the `tool_call` event BEFORE execution)
+- Permission gate (`examples/extensions/permission-gate.ts`): `pi.on("tool_call", handler)` fires BEFORE a tool
+  runs; return `{ block: true, reason }` to stop it; `event.input` is MUTABLE (mutate to patch args, no
+  re-validation). Non-interactive (`!ctx.hasUI`) → block dangerous by default; interactive → `ctx.ui.select(...)`.
+- Protected paths (`protected-paths.ts`): same `tool_call` hook; block `write`/`edit` to `.env`, `.git/`,
+  `node_modules/`, etc.
+- Project trust (`core/project-trust.ts` + extension): a STARTUP event `project_trust {cwd}` resolved BEFORE
+  extensions/`.pi` config load; decision `yes|no|undecided` (+ remember) gates whether project-local extensions,
+  skills, and AGENTS.md are trusted.
+- Sandbox (`examples/extensions/sandbox/`): wraps `BashOperations` with `SandboxManager.wrapWithSandbox()` (uses
+  `@anthropic-ai/sandbox-runtime` → sandbox-exec on macOS, bubblewrap on Linux); allow/deny lists for FS + network
+  in `~/.pi/agent/extensions/sandbox.json` / `.pi/sandbox.json`.
+
+## MECHANISM 8 — THE SYSTEM PROMPT (`packages/coding-agent/src/core/system-prompt.ts` buildSystemPrompt())
+- NOT one magic string and NOT literally minimal — it is COMPOSITIONAL, assembled in order:
+  (1) base template ("a coding assistant operating inside pi" + a tools section) OR a `customPrompt` if supplied;
+  (2) appended `appendSystemPrompt` text; (3) a `<project_context>` XML block containing every AGENTS.md/CLAUDE.md
+  found; (4) an `<available_skills>` XML block (ONLY if the `read` tool is available); (5) the current date +
+  working directory, stamped last.
+- Project context loading (`core/resource-loader.ts loadProjectContextFiles()`): candidates
+  `AGENTS.md|AGENTS.MD|CLAUDE.md|CLAUDE.MD`; load GLOBAL from agentDir (`~/.pi/agent/`) first, then walk UP the
+  ancestor chain from cwd to root collecting files (dedup by path); merged global-first then furthest→closest
+  ancestor. Reloaded on each resource reload, not cached forever.
+
+## MECHANISM 9 — THE EXECUTION ENVIRONMENT (`packages/agent/src/harness/types.ts` + env/nodejs.ts)
+- `ExecutionEnv extends FileSystem, Shell` — the harness's file+process backend. Every method returns
+  `Result<T, Error>` and NEVER throws (errors are values). `FileSystem`: readTextFile/readBinaryFile/writeFile/
+  appendFile/listDir/fileInfo/canonicalPath/createDir/remove/createTempDir/createTempFile/cleanup. `Shell`:
+  `exec(command, options) → {stdout, stderr, exitCode}`. Local impl = `NodeExecutionEnv` (env/nodejs.ts).
+- PER-TOOL operations injection: each tool takes an Operations object so the backend swaps without touching the
+  tool. `BashOperations.exec`, `ReadOperations.{readFile,access,detectImageMimeType}`, plus Write/Edit/Grep ops.
+  Default = `createLocalBashOperations()` / `defaultReadOperations`. The SSH extension (`examples/extensions/ssh.ts`)
+  supplies `createRemoteBashOps`/`createRemoteReadOps` that shell out over `ssh` with path translation; the sandbox
+  extension supplies sandboxed bash ops. Same `read`/`bash`/`edit`, three places to run: local, SSH, sandbox.
+
+## MECHANISM 10 — SURFACES (one headless core, many front-ends) (`packages/coding-agent/src/main.ts`, cli/args.ts)
+- Core = `AgentSession` (mode-agnostic: `prompt()`, `subscribe(event)`, `setModel`, `navigateTree`, `dispose`).
+- 4 surfaces, selected by CLI (`resolveAppMode`): **interactive TUI** (default when TTY), **print** (`--print`/`-p`,
+  or when stdin/stdout not a TTY: run once, emit text, exit), **json** (`--mode json`: structured output,
+  fire-and-forget UI only), **rpc** (`--mode rpc`: strict JSONL over stdin/stdout, 100+ commands — prompt/steer/
+  follow_up/abort, get_state/get_messages/get_tree, set_model, compact, new_session/switch_session/fork/clone…).
+- SDK: `createAgentSession()` (auto-discovers extensions/skills/prompts) and `createAgentSessionRuntime()`
+  (full control: inject your own ResourceLoader, model, explicit tool allowlist). Same core, embedded in your app.
+
+## MECHANISM 11 — EXTENSIBILITY (`packages/coding-agent/src/core/extensions/`, skills.ts)
+- An extension = `export default function (pi: ExtensionAPI) {…}` (sync or async), loaded via jiti from
+  `~/.pi/agent/extensions/*.ts` (global), `.pi/extensions/*.ts` (project, after trust), `-e <path>` flag, or
+  `settings.json` (`extensions`/`packages` incl. `npm:`/`git:`). "Everything is an extension."
+- The `pi.*` API: `registerTool`, `registerCommand` (slash commands + arg completions), `registerShortcut`,
+  `registerFlag`, `registerProvider` (custom LLM providers + OAuth), `registerMessageRenderer`; session actions
+  `sendMessage/sendUserMessage/appendEntry/setSessionName`; tool mgmt `getActiveTools/setActiveTools`; plus a
+  cross-extension `pi.events` bus (`on`/`emit`).
+- `pi.on(EVENT, handler)` — ~31 lifecycle events, the real names: `project_trust, resources_discover,
+  session_start, session_info_changed, session_before_switch, session_before_fork, session_before_compact,
+  session_compact, session_shutdown, session_before_tree, session_tree, context (modify messages before the LLM
+  call), before_provider_request/after_provider_response, before_agent_start, agent_start/agent_end,
+  turn_start/turn_end, message_start/message_update/message_end, tool_execution_start/update/end,
+  model_select, thinking_level_select, tool_call (blockable), tool_result (modifiable), user_bash, input`.
+  The cancellable/blockable ones (`session_before_*`, `tool_call`) are how safety + policy plug in.
+- SKILLS (`core/skills.ts`) = progressive disclosure: a skill is a markdown file (`SKILL.md` at a dir root, or a
+  `.md`) with frontmatter `{name, description(≤1024 chars), disable-model-invocation}`. Only name+description+
+  file location go into the `<available_skills>` prompt block; the model loads the full body ON DEMAND with the
+  read tool when a task matches. Skills live in `~/.pi/agent/skills/` and `.pi/skills/`.

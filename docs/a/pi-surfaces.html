@@ -1,0 +1,115 @@
+<!doctype html><html lang="en" data-theme="terminal"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surfaces: one headless core, four front-ends · Harness Engineering</title>
+<meta name="description" content="Build the layer that turns a model into an agent. A pi-style coding harness, from scratch.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/app.css">
+</head><body class="canvas-paper has-sb">
+<div class="topbar">
+  <a class="brand" href="../index.html"><img class="brand-mark" src="../assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>Harness&nbsp;Engineering</b></span></a>
+  <nav class="topnav"><a class="tn" href="../book.html">The Book</a><a class="tn active" href="../s/pi.html">Pi</a><a class="tn" href="../workshop.html">Workshop</a><a class="tn" href="../projects.html">Projects</a><a class="tn" href="../interactive.html">Interactive</a><a class="tn" href="../mentor/index.html">Mentor Guide</a></nav>
+  <button class="menu-btn" onclick="document.body.classList.toggle(&#39;sb-open&#39;)">☰</button>
+  <div class="top-links">
+    <button class="tbtn icon" id="search-open" title="Search (⌘K)">⌘K</button>
+    <button class="tbtn" id="theme-btn">Terminal</button>
+    <a class="tbtn enroll" href="../workshop.html">Enroll →</a>
+  </div>
+</div>
+<div class="layout">
+<nav class="sidebar" id="sidebar"><a class="sb-home" href="../s/pi.html">‹ Pi from scratch</a><details class="sb-sec" open><summary><span class="sb-num">06</span> Pi from Scratch</summary><a class="sb-item" href="../a/pi-how-it-all-fits.html">Pi from scratch: the plan<span class="chip">START</span></a><a class="sb-item" href="../a/pi-from-chat-to-agent.html">The loop: from a chat call to an agent<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-toolbox.html">The toolbox: giving Pi hands<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-tool-safety.html">Tool safety: permission gates, protected paths, trust<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-system-prompt.html">The system prompt: how Pi tells the model who it is<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-execution-environment.html">The execution environment: local, SSH, sandboxed<span class="chip">BUILD</span></a><a class="sb-item" href="../a/how-pi-manages-context.html">How Pi manages context (not 'the last three messages')<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-does-cache-control.html">How Pi does cache control: the rolling breakpoint<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-truncates-tool-output.html">Does Pi serve the agent everything? (No, it truncates)<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-does-subagents.html">How Pi does subagents: three mechanisms, three scales<span class="chip">DEEP</span></a><a class="sb-item active" href="../a/pi-surfaces.html">Surfaces: one headless core, four front-ends<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-extensibility.html">Extensibility: everything is an extension<span class="chip">BUILD</span></a></details></nav>
+<main class="content"><article class="worklog">
+<div class="art-kicker"><span class="art-sec">06 · Pi from Scratch</span></div>
+<h1 class="art-title">Surfaces: one headless core, four front-ends <span class="chip lg">BUILD</span></h1>
+<div class="art-body"><p>Here is a question that sounds too simple to be worth asking, and turns out to reorganize how you see the whole system: <strong>when you type into Pi's terminal and watch the answer scroll back, what part of that is the agent?</strong> Not the box you typed into. Not the colored diff. Not the spinner. Those are pixels — a <em>front-end</em>. The agent is a thing behind all of it, and it has never once cared whether a human was watching. Pull it into the daylight and you find it will just as happily be driven by a shell script, a JSON reader, or another program on the far end of a pipe. The terminal was one costume. There are four.</p>
+<p>Everything so far has been about building the agent: <a href="pi-from-chat-to-agent.html" target="_blank" rel="noopener">the loop</a>, <a href="pi-the-toolbox.html" target="_blank" rel="noopener">the toolbox</a>, <a href="how-pi-manages-context.html" target="_blank" rel="noopener">context management</a>, <a href="how-pi-does-subagents.html" target="_blank" rel="noopener">subagents</a>. This chapter is about the seam — the deliberate cut Pi makes between <em>the agent</em> and <em>the way you talk to it</em> — and why that one cut is the reason the same engine can be a terminal, a script, a server, and a library at once.</p>
+<h2 id="the-thing-the-last-chapters-kept-assuming">The thing the last chapters kept assuming</h2>
+<p>Look back at every mechanism we built and notice a quiet assumption riding along: <em>someone is there.</em> The loop streams tokens as if a human is reading them. Tool approval pauses as if a human will type "yes." None of that machinery actually <em>needs</em> a human — but if the agent and the terminal are the same object, the human is welded in, and you cannot run Pi in a cron job, a CI pipeline, or inside your own product without dragging a terminal along.</p>
+<p>So the missing layer is a boundary. Pi's answer is to make the agent a plain object with no opinion about who is driving it.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-surfaces-1.png" alt="Pi cuts one seam: a headless AgentSession core on one side, interchangeable front-ends on the other. The core never know" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-surfaces-1.png"><span class="fig-ph">figure rendering &middot; Pi cuts one seam: a headless AgentSession core on one side, interchang</span></div><figcaption>Pi cuts one seam: a headless AgentSession core on one side, interchangeable front-ends on the other. The core never knows which costume is worn.</figcaption></figure>
+<h2 id="the-headless-core-agentsession">The headless core: AgentSession</h2>
+<p>The object that lives behind the seam is <code>AgentSession</code>, in <code>packages/coding-agent/src/core/agent-session.ts</code>. It is deliberately small in <em>surface</em> — a handful of methods — even though it drives the entire agent underneath.<label for="sn-pi-surfaces-1" class="sn-ref">1</label><input type="checkbox" id="sn-pi-surfaces-1" class="sn-toggle"><span class="sidenote"><sup>1</sup> Small in interface, large in body: the class file is long, but almost all of that is internal handling of agent events, compaction, and session trees. What a <em>caller</em> touches is the tiny public API below. That asymmetry is the whole point of a good seam.</span> Here is the shape of it, straight from the source:</p>
+<pre class="code" data-lang="typescript"><code>export class AgentSession {
+  // send a turn; resolves when the turn is fully processed
+  async prompt(text: string, options?: PromptOptions): Promise&lt;void&gt;
+
+  // watch everything the agent does; returns an unsubscribe fn
+  subscribe(listener: AgentSessionEventListener): () =&gt; void
+
+  async setModel(model: Model&lt;any&gt;): Promise&lt;void&gt;
+  async navigateTree(/* … move within the session's branch tree */)
+  dispose(): void
+}</code></pre>
+<p>That is almost the entire contract. You <strong>push</strong> a turn in with <code>prompt()</code>, and you <strong>subscribe</strong> to a stream of events coming back out. Nothing in that pair says "render to a terminal." The events are typed and structural — the <code>AgentSessionEvent</code> union includes things like <code>agent_end</code> (with the final messages), <code>queue_update</code>, <code>compaction_start</code>, <code>entry_appended</code>, <code>thinking_level_changed</code>. A front-end is just <em>something that calls <code>prompt()</code> and does something useful with those events.</em></p>
+<p>Sit with how freeing that is. The core does not <code>console.log</code> and does not read the keyboard. It emits <code>entry_appended</code> and moves on. Whether that becomes a syntax-highlighted panel, a line of JSON, or nothing at all is entirely the caller's business.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-surfaces-2.png" alt="The core's public surface: prompt() to push a turn, subscribe() to receive a typed event stream, plus setModel / navigat" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-surfaces-2.png"><span class="fig-ph">figure rendering &middot; The core's public surface: prompt() to push a turn, subscribe() to rec</span></div><figcaption>The core's public surface: prompt() to push a turn, subscribe() to receive a typed event stream, plus setModel / navigateTree / dispose. No rendering, no input — just structure.</figcaption></figure>
+<h2 id="four-surfaces-chosen-by-one-function">Four surfaces, chosen by one function</h2>
+<p>Now for the costumes. When you run the <code>pi</code> binary, <code>main.ts</code> has to decide which front-end to wear before it does anything else. That decision lives in one small function, <code>resolveAppMode</code> in <code>packages/coding-agent/src/main.ts</code>, and it is worth reading in full because it is refreshingly blunt:</p>
+<pre class="code" data-lang="typescript"><code>function resolveAppMode(parsed, stdinIsTTY, stdoutIsTTY): AppMode {
+  if (parsed.mode === "rpc")  return "rpc";
+  if (parsed.mode === "json") return "json";
+  if (parsed.print || !stdinIsTTY || !stdoutIsTTY) return "print";
+  return "interactive";
+}</code></pre>
+<p>Four outcomes, in priority order. Explicit flags win first; then the <em>shape of your pipes</em> decides; and only if you are clearly a human at a real terminal do you get the full interface. Let me take them in the order the function considers them, because each one exists for a reason the one above it couldn't cover.</p>
+<p><strong>Interactive (the default on a TTY).</strong> This is the <code>InteractiveMode</code> you know — the full terminal UI with streaming output, live tool diffs, slash commands, <code>Ctrl+P</code> model cycling. It is what you get when both <code>stdin</code> and <code>stdout</code> are a TTY and you passed no mode flag. It is the richest surface and, notably, it is the <em>last</em> thing <code>resolveAppMode</code> falls back to, not the first thing it assumes.</p>
+<p><strong>Print (<code>--print</code> / <code>-p</code>, or no TTY).</strong> The moment you pipe Pi's input or output somewhere — <code>echo "..." | pi</code>, or <code>pi -p "fix the lint" &gt; out.txt</code> — <code>stdinIsTTY</code> or <code>stdoutIsTTY</code> goes false and Pi drops to <strong>print</strong> mode: run the prompt once, emit the final text, exit.<label for="sn-pi-surfaces-2" class="sn-ref">2</label><input type="checkbox" id="sn-pi-surfaces-2" class="sn-toggle"><span class="sidenote"><sup>2</sup> This TTY-sniffing is why Pi "just works" in a script without you asking for it. The Unix convention that a program should behave differently when its output is a pipe rather than a screen is decades old; Pi honours it by reading <code>process.stdout.isTTY</code>. There is even a second path in <code>main.ts</code> where piped-in stdin <em>content</em> flips an interactive launch into print mode after the fact.</span> No spinner, no color, no waiting for a human. This is the surface a shell script or a Makefile talks to.</p>
+<p><strong>JSON (<code>--mode json</code>).</strong> Same run-once, fire-and-forget shape as print, but the output is structured rather than prose. <code>toPrintOutputMode</code> maps this mode to a <code>"json"</code> output rather than <code>"text"</code>. You reach for this when a <em>program</em> needs to read Pi's result reliably rather than scrape human-readable text.</p>
+<p><strong>RPC (<code>--mode rpc</code>).</strong> The most powerful surface, and the one that most clearly proves the agent is not a UI: a strict <strong>JSONL</strong> protocol over <code>stdin</code>/<code>stdout</code>. One JSON command per line in; a stream of JSON responses and events per line out. This is a long-lived, two-way conversation with the <em>object</em>, not a one-shot. It is how another process — an editor plugin, a web backend, a test harness — drives Pi as a service.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-surfaces-3.png" alt="One AgentSession, four front-ends fanned out by resolveAppMode: interactive TUI, print, json, and rpc — flags decide fir" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-surfaces-3.png"><span class="fig-ph">figure rendering &middot; One AgentSession, four front-ends fanned out by resolveAppMode: intera</span></div><figcaption>One AgentSession, four front-ends fanned out by resolveAppMode: interactive TUI, print, json, and rpc — flags decide first, pipe shape second, a human-at-a-terminal last.</figcaption></figure>
+<h2 id="watch-it-happen-the-rpc-exchange">Watch it happen: the RPC exchange</h2>
+<p>The RPC surface is where the seam becomes something you can see on the wire, so let's put it under glass. Its command vocabulary is large — dozens of command types, defined as a tagged union in <code>packages/coding-agent/src/modes/rpc/rpc-types.ts</code>. A taste of the <code>RpcCommand</code> type:</p>
+<pre class="code" data-lang="typescript"><code>export type RpcCommand =
+  | { id?: string; type: "prompt"; message: string; /* … */ }
+  | { id?: string; type: "steer";     message: string }
+  | { id?: string; type: "follow_up"; message: string }
+  | { id?: string; type: "abort" }
+  | { id?: string; type: "get_state" }
+  | { id?: string; type: "get_messages" }
+  | { id?: string; type: "get_tree" }
+  | { id?: string; type: "set_model"; provider: string; modelId: string }
+  | { id?: string; type: "compact"; customInstructions?: string }
+  | { id?: string; type: "new_session"; parentSession?: string }
+  | { id?: string; type: "switch_session"; sessionPath: string }
+  | { id?: string; type: "fork"; entryId: string }
+  | { id?: string; type: "clone" }
+  // … dozens of commands in total</code></pre>
+<p>Every capability we built into the agent over the last chapters shows up here as a command you can send <em>from another program</em>: <code>steer</code> mid-turn, <code>abort</code> a runaway, <code>compact</code> the context, <code>fork</code> the session tree at an entry, <code>clone</code> it, ask for <code>get_state</code> or <code>get_messages</code> or <code>get_tree</code>. The TUI's buttons and the RPC's commands are the same actions on the same core — one triggered by a keystroke, the other by a line of JSON.<label for="sn-pi-surfaces-3" class="sn-ref">3</label><input type="checkbox" id="sn-pi-surfaces-3" class="sn-toggle"><span class="sidenote"><sup>3</sup> This is the tell that the seam is real and not cosmetic: the interactive UI and the RPC protocol are <em>peers</em>, both thin drivers over <code>AgentSession</code>. Neither is privileged. If a capability existed only in the TUI, it would mean logic had leaked out of the core and into a costume — a design smell Pi avoids.</span></p>
+<p>Here is the smallest useful conversation. You send one line, you read many:</p>
+<pre class="code" data-lang=""><code>→  {"type":"prompt","message":"read README.md and summarize it"}
+
+←  {"type":"response","command":"prompt","success":true}
+←  {"type":"entry_appended", ...}   // assistant asks to read
+←  {"type":"entry_appended", ...}   // tool result comes back
+←  {"type":"agent_end", ...}        // final turn, done</code></pre>
+<p>The command was acknowledged with a <code>response</code> (Pi's <code>RpcResponse</code> type — a success record keyed to the command), and then the <em>same event stream</em> the TUI subscribes to came out as JSONL. The two are different things: the <code>response</code> says "I received and accepted your command," while the <code>event</code> lines are the live narration of the agent working. A program on the far end reads those lines, updates its own UI, and — when it sees <code>agent_end</code> — knows the turn is complete and can send the next <code>prompt</code>. That is a full editor integration in miniature.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-surfaces-4.png" alt="An RPC turn: a single prompt command goes in on stdin, an acknowledging response plus a stream of entry_appended / agent" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-surfaces-4.png"><span class="fig-ph">figure rendering &middot; An RPC turn: a single prompt command goes in on stdin, an acknowledgin</span></div><figcaption>An RPC turn: a single prompt command goes in on stdin, an acknowledging response plus a stream of entry_appended / agent_end events come back as JSONL on stdout.</figcaption></figure>
+<h2 id="the-library-door-the-sdk">The library door: the SDK</h2>
+<p>The four surfaces all ship inside the <code>pi</code> binary. But the seam has one more consequence: if the agent is just an object, you can <code>import</code> it. Pi exposes two doors for embedding the core in <em>your own</em> program, in <code>packages/coding-agent/src/core/sdk.ts</code> and <code>agent-session-runtime.ts</code>.</p>
+<p><code>createAgentSession()</code> is the batteries-included door. Call it with no arguments and it auto-discovers your extensions, skills, and prompts, restores a prior session if one exists, picks a model, and hands you back a live <code>session</code>:</p>
+<pre class="code" data-lang="typescript"><code>const { session } = await createAgentSession();
+session.subscribe((event) =&gt; { /* your UI */ });
+await session.prompt("explain this repo");</code></pre>
+<p>The same <code>createAgentSession()</code> is also the full-control door: pass it explicit options and nothing is auto-discovered, so nothing surprises you. You inject your own <code>ResourceLoader</code>, your own <code>Model</code>, an explicit tool allowlist:</p>
+<pre class="code" data-lang="typescript"><code>const { session } = await createAgentSession({
+  model: myModel,
+  tools: ["read", "bash"],       // explicit allowlist
+  resourceLoader: loader,        // your own resource loading
+  sessionManager: SessionManager.inMemory(),
+});</code></pre>
+<p>Same <code>AgentSession</code>, same <code>prompt()</code>/<code>subscribe()</code> contract — now living inside your app instead of behind a CLI. The fifth "surface," if you like, is <em>no surface at all</em>: Pi as a library.</p>
+<h2 id="why-this-is-the-whole-lesson">Why this is the whole lesson</h2>
+<p>Step back and name what happened. We did not add a feature to the agent in this chapter. We added <em>nothing</em> to it. All four surfaces and both SDK doors drive the identical <code>AgentSession</code> you already built — the same loop, the same tools, the same context engine. What made them possible was a single decision made once: <strong>do not weld the agent to the way you watch it.</strong> Push turns in with <code>prompt()</code>, pull typed events out with <code>subscribe()</code>, and let a tiny <code>resolveAppMode</code> pick the costume.</p>
+<p>That is why the same engine is a terminal for you, a one-shot for a script, a structured result for a program, a JSONL service for an editor, and a library inside a product — all without the core knowing which. A harness is not a UI. The moment you internalize that, you stop building agents trapped in the terminal you first wrote them in.</p>
+<p>With the surfaces mapped, one door remains ajar: those auto-discovered <em>extensions</em> that <code>createAgentSession()</code> loads. What are they, and how far can they reshape the agent from the outside? That is <a href="pi-extensibility.html" target="_blank" rel="noopener">Pi's extensibility</a> — the last layer, and the one that makes everything before it configurable.</p></div>
+<div class="prevnext"><a class="pn prev" href="how-pi-does-subagents.html"><span>‹ previous</span>How Pi does subagents: three mechanisms, three scales</a><a class="pn next" href="pi-extensibility.html"><span>next ›</span>Extensibility: everything is an extension</a></div>
+</article></main>
+</div>
+<div class="search-modal" id="search-modal"><div class="search-box">
+  <input id="search-input" placeholder="Search articles, terms, kernels…" autocomplete="off">
+  <div id="search-results"></div>
+  <div class="search-hint">↑↓ to navigate · ↵ to open · esc to close</div>
+</div></div>
+<script>window.SEARCH_BASE="../";</script>
+<script src="../assets/app.js"></script>
+</body></html>

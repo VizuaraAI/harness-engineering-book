@@ -1,0 +1,99 @@
+<!doctype html><html lang="en" data-theme="terminal"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The system prompt: how Pi tells the model who it is · Harness Engineering</title>
+<meta name="description" content="Build the layer that turns a model into an agent. A pi-style coding harness, from scratch.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/app.css">
+</head><body class="canvas-paper has-sb">
+<div class="topbar">
+  <a class="brand" href="../index.html"><img class="brand-mark" src="../assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>Harness&nbsp;Engineering</b></span></a>
+  <nav class="topnav"><a class="tn" href="../book.html">The Book</a><a class="tn active" href="../s/pi.html">Pi</a><a class="tn" href="../workshop.html">Workshop</a><a class="tn" href="../projects.html">Projects</a><a class="tn" href="../interactive.html">Interactive</a><a class="tn" href="../mentor/index.html">Mentor Guide</a></nav>
+  <button class="menu-btn" onclick="document.body.classList.toggle(&#39;sb-open&#39;)">☰</button>
+  <div class="top-links">
+    <button class="tbtn icon" id="search-open" title="Search (⌘K)">⌘K</button>
+    <button class="tbtn" id="theme-btn">Terminal</button>
+    <a class="tbtn enroll" href="../workshop.html">Enroll →</a>
+  </div>
+</div>
+<div class="layout">
+<nav class="sidebar" id="sidebar"><a class="sb-home" href="../s/pi.html">‹ Pi from scratch</a><details class="sb-sec" open><summary><span class="sb-num">06</span> Pi from Scratch</summary><a class="sb-item" href="../a/pi-how-it-all-fits.html">Pi from scratch: the plan<span class="chip">START</span></a><a class="sb-item" href="../a/pi-from-chat-to-agent.html">The loop: from a chat call to an agent<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-toolbox.html">The toolbox: giving Pi hands<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-tool-safety.html">Tool safety: permission gates, protected paths, trust<span class="chip">BUILD</span></a><a class="sb-item active" href="../a/pi-the-system-prompt.html">The system prompt: how Pi tells the model who it is<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-execution-environment.html">The execution environment: local, SSH, sandboxed<span class="chip">BUILD</span></a><a class="sb-item" href="../a/how-pi-manages-context.html">How Pi manages context (not 'the last three messages')<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-does-cache-control.html">How Pi does cache control: the rolling breakpoint<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-truncates-tool-output.html">Does Pi serve the agent everything? (No, it truncates)<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-does-subagents.html">How Pi does subagents: three mechanisms, three scales<span class="chip">DEEP</span></a><a class="sb-item" href="../a/pi-surfaces.html">Surfaces: one headless core, four front-ends<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-extensibility.html">Extensibility: everything is an extension<span class="chip">BUILD</span></a></details></nav>
+<main class="content"><article class="worklog">
+<div class="art-kicker"><span class="art-sec">06 · Pi from Scratch</span></div>
+<h1 class="art-title">The system prompt: how Pi tells the model who it is <span class="chip lg">BUILD</span></h1>
+<div class="art-body"><p>By now Pi can call the model, run tools, and keep a conversation alive across many laps. But there is a question we have quietly dodged the whole time: on that very first call, before the user has typed anything, <em>what does the model know about itself?</em> It has never met Pi. It doesn't know it lives in a coding agent, doesn't know today's date, doesn't know which directory it's sitting in, and has never read a line of this project's conventions. Hand a blank-slate model a request and it will guess at all of that — and guess wrong. The system prompt is where Pi stops the guessing.</p>
+<p>There is a myth to clear away first. People imagine the system prompt is <em>one magic string</em> — some carefully tuned paragraph that a lab spent months polishing, dropped in whole. Pi's core prompt is genuinely small, almost boring. But the prompt the model actually receives is not that string. It is <strong>assembled</strong>, fresh, on every call, out of five stacked pieces — and most of what makes it useful comes from the pieces Pi discovers about <em>your</em> machine and <em>your</em> project, not from the template at all.</p>
+<h2 id="one-function-five-pieces-in-order">One function, five pieces, in order</h2>
+<p>The whole assembly lives in one function: <code>buildSystemPrompt()</code> in <code>packages/coding-agent/src/core/system-prompt.ts</code>. It takes an options bag — <code>cwd</code>, the selected tools, pre-loaded <code>contextFiles</code>, pre-loaded <code>skills</code>, an optional <code>appendSystemPrompt</code>, an optional <code>customPrompt</code> — and returns a single string. Read it as a stack being built bottom-up, five layers, always in this order.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-the-system-prompt-1.png" alt="The five pieces buildSystemPrompt stacks in order: base template, appended text, project context, skills, and finally th" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-the-system-prompt-1.png"><span class="fig-ph">figure rendering &middot; The five pieces buildSystemPrompt stacks in order: base template, appe</span></div><figcaption>The five pieces buildSystemPrompt stacks in order: base template, appended text, project context, skills, and finally the date and working directory.</figcaption></figure>
+<p>Let me walk the five in the order the code writes them.</p>
+<p><strong>Piece 1 — the base template (or a replacement).</strong> If the caller passes a <code>customPrompt</code>, Pi uses that verbatim and skips the template entirely.<label for="sn-pi-the-system-prompt-1" class="sn-ref">1</label><input type="checkbox" id="sn-pi-the-system-prompt-1" class="sn-toggle"><span class="sidenote"><sup>1</sup> This is the escape hatch: an extension or SDK embedder can throw away Pi's identity text and supply its own. Everything <em>after</em> piece 1 — context, skills, date — still gets appended on top, so even a custom prompt gets Pi's project awareness for free.</span> Otherwise it uses the built-in template, which opens with a single sentence of identity:</p>
+<pre class="code" data-lang=""><code>You are an expert coding assistant operating inside pi, a coding agent harness.
+You help users by reading files, executing commands, editing code, and writing new files.
+
+Available tools:
+- read: …
+- bash: …
+
+Guidelines:
+- Be concise in your responses
+- Show file paths clearly when working with files</code></pre>
+<p>That is the "magic string," and notice how little of it there is. One line of who-you-are, a list of the tools that are actually turned on this session, and a couple of guidelines. There is nothing project-specific in it — because none of the project-specific stuff <em>belongs</em> in a static template. It is discovered.</p>
+<h2 id="the-list-of-tools-is-not-a-fixed-list">The list of tools is not a fixed list</h2>
+<p>Look again at that <code>Available tools:</code> section. It is not hardcoded either. <code>buildSystemPrompt</code> receives <code>selectedTools</code> and <code>toolSnippets</code>, and a tool only appears in the prompt if the caller handed over a one-line snippet for it:</p>
+<pre class="code" data-lang="ts"><code>const tools = selectedTools || ["read", "bash", "edit", "write"];
+const visibleTools = tools.filter((name) =&gt; !!toolSnippets?.[name]);</code></pre>
+<p>So the prompt's self-description of its own hands changes with the session's actual toolset. Turn a tool off and its line vanishes; the model is never told about a capability it doesn't have.<label for="sn-pi-the-system-prompt-2" class="sn-ref">2</label><input type="checkbox" id="sn-pi-the-system-prompt-2" class="sn-toggle"><span class="sidenote"><sup>2</sup> The same source of truth also drives the <em>guidelines</em>. <code>buildSystemPrompt</code> checks <code>tools.includes("bash")</code>, <code>"grep"</code>, <code>"find"</code>, <code>"ls"</code> and only then adds a bullet like "Use bash for file operations like ls, rg, find" — advice that would be nonsense if bash were disabled.</span> This is the first hint of the theme: the prompt describes the world <em>as it actually is this run</em>, not a world imagined at build time. The full toolbox lives in <a href="pi-the-toolbox.html" target="_blank" rel="noopener">Pi's toolbox</a>; here it's enough to see that the prompt <em>reads</em> from it.</p>
+<p><strong>Piece 2 — appended text.</strong> If <code>appendSystemPrompt</code> is set, Pi glues it on with a blank line between. It's the "…and one more thing" slot — a place to bolt on policy without touching the template.</p>
+<p><strong>Piece 3 — <code>&lt;project_context&gt;</code>.</strong> Now the assembly stops describing Pi and starts describing <em>you</em>. If any context files were loaded, they go into an XML block:</p>
+<pre class="code" data-lang="ts"><code>prompt += "\n\n&lt;project_context&gt;\n\n";
+prompt += "Project-specific instructions and guidelines:\n\n";
+for (const { path, content } of contextFiles) {
+    prompt += `&lt;project_instructions path="${path}"&gt;\n${content}\n&lt;/project_instructions&gt;\n\n`;
+}
+prompt += "&lt;/project_context&gt;\n";</code></pre>
+<p>Each file is wrapped in its own <code>&lt;project_instructions&gt;</code> tag stamped with the real path it came from, so the model can see not just <em>what</em> the instruction is but <em>where</em> it lives. Where those files come from is the second half of this chapter.</p>
+<p><strong>Piece 4 — <code>&lt;available_skills&gt;</code>.</strong> Skills get their own block, appended by <code>formatSkillsForPrompt()</code>. It lists only each skill's <code>&lt;name&gt;</code>, <code>&lt;description&gt;</code>, and <code>&lt;location&gt;</code> — never the full body — so the model learns a skill <em>exists</em> without paying the tokens to load it, then reads the file on demand when a task matches. And there is a hard gate:</p>
+<pre class="code" data-lang="ts"><code>if (hasRead &amp;&amp; skills.length &gt; 0) {
+    prompt += formatSkillsForPrompt(skills);
+}</code></pre>
+<p>The skills block is added <strong>only if the <code>read</code> tool is present</strong>. That is not decoration — it is honesty. A skill's whole promise is "read my file later." If the model can't read, advertising the skill would be a lie, so Pi simply doesn't. The progressive-disclosure design behind this is the subject of <a href="pi-extensibility.html" target="_blank" rel="noopener">Pi's extensibility</a>.</p>
+<p><strong>Piece 5 — date and directory, stamped last.</strong> The very last thing appended, every single call:</p>
+<pre class="code" data-lang="ts"><code>prompt += `\nCurrent date: ${date}`;
+prompt += `\nCurrent working directory: ${promptCwd}`;</code></pre>
+<p><code>date</code> is computed from <code>new Date()</code> at assembly time. This is why a Pi session started tomorrow knows it's tomorrow, and a session started in a different folder knows where it is — no reconfiguration, no restart. The two facts a base model can never know on its own get stamped in fresh, last, so they're always current.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-the-system-prompt-2.png" alt="The same template produces different prompts run to run: the date advances every call, and the skills block disappears t" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-the-system-prompt-2.png"><span class="fig-ph">figure rendering &middot; The same template produces different prompts run to run: the date adva</span></div><figcaption>The same template produces different prompts run to run: the date advances every call, and the skills block disappears the moment the read tool is absent.</figcaption></figure>
+<h2 id="where-project-context-comes-from-the-walk-up">Where <code>&lt;project_context&gt;</code> comes from: the walk-up</h2>
+<p>We said the project files are <em>discovered</em>. Here is the discovery, in <code>loadProjectContextFiles()</code> (<code>packages/coding-agent/src/core/resource-loader.ts</code>). At each directory Pi looks for four candidate filenames, in this order, and takes the first that exists:</p>
+<pre class="code" data-lang="ts"><code>const candidates = ["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"];</code></pre>
+<p>Then it gathers files from two sources. <strong>First, the global file</strong> — from the agent directory, <code>~/.pi/agent/</code>. That's your personal, cross-project standing instructions, and it goes in first. <strong>Then it walks up.</strong> Starting at <code>cwd</code>, Pi checks the current directory, then its parent, then <em>its</em> parent, all the way to the filesystem root:</p>
+<pre class="code" data-lang="ts"><code>let currentDir = resolvedCwd;
+while (true) {
+    const contextFile = loadContextFileFromDir(currentDir);
+    if (contextFile &amp;&amp; !seenPaths.has(contextFile.path)) {
+        ancestorContextFiles.unshift(contextFile);   // furthest ancestor ends up first
+        seenPaths.add(contextFile.path);
+    }
+    if (currentDir === root) break;
+    const parentDir = resolve(currentDir, "..");
+    if (parentDir === currentDir) break;
+    currentDir = parentDir;
+}</code></pre>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-the-system-prompt-3.png" alt="Pi loads the global file first, then walks up from cwd to root collecting AGENTS.md/CLAUDE.md files, deduped by path and" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-the-system-prompt-3.png"><span class="fig-ph">figure rendering &middot; Pi loads the global file first, then walks up from cwd to root collect</span></div><figcaption>Pi loads the global file first, then walks up from cwd to root collecting AGENTS.md/CLAUDE.md files, deduped by path and ordered furthest ancestor to closest.</figcaption></figure>
+<p>Two details in that loop earn their keep. The <code>unshift</code> means each ancestor found is pushed to the <em>front</em> of the list, so after the climb the ordering runs <strong>furthest ancestor → closest</strong>. And <code>seenPaths</code> <strong>dedups by path</strong>, so a file already loaded (say, the global one) is never counted twice. The final list is global-first, then furthest-to-closest — which means the file <em>nearest your actual work</em> is appended last, and gets the final word.<label for="sn-pi-the-system-prompt-3" class="sn-ref">3</label><input type="checkbox" id="sn-pi-the-system-prompt-3" class="sn-toggle"><span class="sidenote"><sup>3</sup> Order matters because these are stacked instructions, not a merge. A monorepo-root <code>AGENTS.md</code> can set house style, and a package-level <code>CLAUDE.md</code> deeper down can refine or override it — and because closest-is-last, the more specific file is the one the model reads most recently. Pi doesn't resolve conflicts; it lets proximity do it.</span></p>
+<p>And crucially, this is <strong>reloaded on each resource reload</strong>, not frozen at startup. Edit an <code>AGENTS.md</code> mid-session and Pi picks it up the next time it rebuilds — the same way the date re-stamps itself. The project context is a live view of your files, not a snapshot.</p>
+<h2 id="the-one-idea-to-take-away">The one idea to take away</h2>
+<p>Step back and the pattern is unmistakable. A bare model arrives knowing nothing about its situation. Pi's answer is not to write a giant static prompt that tries to anticipate every project — that string would be stale the moment it shipped. Instead it keeps the hardcoded part deliberately tiny, and <em>assembles</em> the rest from what's true right now: which tools are on, which <code>AGENTS.md</code> files sit above your cwd, which skills you have, what today's date is, where you're standing.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-the-system-prompt-4.png" alt="Almost nothing about the model's sense of itself is hardcoded; it is composed each call from the real tools, files, skil" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-the-system-prompt-4.png"><span class="fig-ph">figure rendering &middot; Almost nothing about the model's sense of itself is hardcoded; it is c</span></div><figcaption>Almost nothing about the model's sense of itself is hardcoded; it is composed each call from the real tools, files, skills, date, and directory around it.</figcaption></figure>
+<p>That is the whole lesson of the system prompt in Pi: the model's sense of <em>who am I, where am I, what do I know about this project</em> is not a fixed string it was born with. It is built, in order, on every call, out of the world the agent currently finds itself in. Which raises the next question — that "world" keeps talking about files and a working directory and running commands, but <em>whose</em> filesystem, and <em>whose</em> shell? That is <a href="pi-the-execution-environment.html" target="_blank" rel="noopener">Pi's execution environment</a>, where we pin down exactly what "here" means. For the wider tour of how these parts snap together, see <a href="pi-how-it-all-fits.html" target="_blank" rel="noopener">how it all fits</a>.</p></div>
+<div class="prevnext"><a class="pn prev" href="pi-tool-safety.html"><span>‹ previous</span>Tool safety: permission gates, protected paths, trust</a><a class="pn next" href="pi-the-execution-environment.html"><span>next ›</span>The execution environment: local, SSH, sandboxed</a></div>
+</article></main>
+</div>
+<div class="search-modal" id="search-modal"><div class="search-box">
+  <input id="search-input" placeholder="Search articles, terms, kernels…" autocomplete="off">
+  <div id="search-results"></div>
+  <div class="search-hint">↑↓ to navigate · ↵ to open · esc to close</div>
+</div></div>
+<script>window.SEARCH_BASE="../";</script>
+<script src="../assets/app.js"></script>
+</body></html>

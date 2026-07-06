@@ -1,0 +1,111 @@
+<!doctype html><html lang="en" data-theme="terminal"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The loop: from a chat call to an agent · Harness Engineering</title>
+<meta name="description" content="Build the layer that turns a model into an agent. A pi-style coding harness, from scratch.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/app.css">
+</head><body class="canvas-paper has-sb">
+<div class="topbar">
+  <a class="brand" href="../index.html"><img class="brand-mark" src="../assets/logo.png" alt="" onerror="this.style.display='none'"><span class="brand-txt">Vizuara <b>Harness&nbsp;Engineering</b></span></a>
+  <nav class="topnav"><a class="tn" href="../book.html">The Book</a><a class="tn active" href="../s/pi.html">Pi</a><a class="tn" href="../workshop.html">Workshop</a><a class="tn" href="../projects.html">Projects</a><a class="tn" href="../interactive.html">Interactive</a><a class="tn" href="../mentor/index.html">Mentor Guide</a></nav>
+  <button class="menu-btn" onclick="document.body.classList.toggle(&#39;sb-open&#39;)">☰</button>
+  <div class="top-links">
+    <button class="tbtn icon" id="search-open" title="Search (⌘K)">⌘K</button>
+    <button class="tbtn" id="theme-btn">Terminal</button>
+    <a class="tbtn enroll" href="../workshop.html">Enroll →</a>
+  </div>
+</div>
+<div class="layout">
+<nav class="sidebar" id="sidebar"><a class="sb-home" href="../s/pi.html">‹ Pi from scratch</a><details class="sb-sec" open><summary><span class="sb-num">06</span> Pi from Scratch</summary><a class="sb-item" href="../a/pi-how-it-all-fits.html">Pi from scratch: the plan<span class="chip">START</span></a><a class="sb-item active" href="../a/pi-from-chat-to-agent.html">The loop: from a chat call to an agent<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-toolbox.html">The toolbox: giving Pi hands<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-tool-safety.html">Tool safety: permission gates, protected paths, trust<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-system-prompt.html">The system prompt: how Pi tells the model who it is<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-the-execution-environment.html">The execution environment: local, SSH, sandboxed<span class="chip">BUILD</span></a><a class="sb-item" href="../a/how-pi-manages-context.html">How Pi manages context (not 'the last three messages')<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-does-cache-control.html">How Pi does cache control: the rolling breakpoint<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-truncates-tool-output.html">Does Pi serve the agent everything? (No, it truncates)<span class="chip">DEEP</span></a><a class="sb-item" href="../a/how-pi-does-subagents.html">How Pi does subagents: three mechanisms, three scales<span class="chip">DEEP</span></a><a class="sb-item" href="../a/pi-surfaces.html">Surfaces: one headless core, four front-ends<span class="chip">BUILD</span></a><a class="sb-item" href="../a/pi-extensibility.html">Extensibility: everything is an extension<span class="chip">BUILD</span></a></details></nav>
+<main class="content"><article class="worklog">
+<div class="art-kicker"><span class="art-sec">06 · Pi from Scratch</span></div>
+<h1 class="art-title">The loop: from a chat call to an agent <span class="chip lg">BUILD</span></h1>
+<div class="art-body"><p>A model call answers once. You hand it messages, it hands you back one message, and then it forgets you exist. That is a chat. An agent is different in exactly one way: it keeps going — reads a file, sees what's inside, edits something, runs the tests, notices they failed, tries again — until the job is actually done. Nothing about the model changed between those two sentences. What changed is that somebody wrapped the single call in a loop and taught the loop when to stop.</p>
+<p>That loop is the beating heart of Pi, and it is smaller than you'd guess. In this chapter we open <code>packages/agent/src/agent-loop.ts</code> and read the real <code>runLoop()</code> — the function every Pi session, every <code>pi</code> command, every subagent ultimately runs inside. By the end you'll be able to trace one lap by hand and name the exact three conditions that end it.<label for="sn-pi-from-chat-to-agent-1" class="sn-ref">1</label><input type="checkbox" id="sn-pi-from-chat-to-agent-1" class="sn-toggle"><span class="sidenote"><sup>1</sup> This is a build chapter in a from-scratch book, so we motivate each piece by what the last one left missing. But the subject here is not a teaching toy — it's Pi's own shipping code, read line by line.</span></p>
+<h2 id="what-the-last-layer-left-missing">What the last layer left missing</h2>
+<p>Elsewhere we saw Pi's model client: give <code>streamAssistantResponse()</code> a context and it streams back one assistant message. Useful, and completely inert. Ask it to "fix the failing test" and it will say <em>"let me look at the test file"</em> and then stop — because a single call has no next step. It can <em>request</em> a tool, but nobody ran it; it never sees the result; it never gets a second chance to reason.</p>
+<p>So the missing layer is control flow. Something has to: take the assistant's message, notice it asked for tools, actually execute them, thread the results back in, and call the model <em>again</em> so it can react. Repeat until there's nothing left to do. That "repeat until" is the whole job of <code>runLoop()</code>.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-from-chat-to-agent-1.png" alt="A single call asks for a tool and halts. The loop runs the tool, feeds the result back, and calls the model again — that" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-from-chat-to-agent-1.png"><span class="fig-ph">figure rendering &middot; A single call asks for a tool and halts. The loop runs the tool, feeds</span></div><figcaption>A single call asks for a tool and halts. The loop runs the tool, feeds the result back, and calls the model again — that repetition is agency.</figcaption></figure>
+<h2 id="the-shape-of-one-turn">The shape of one turn</h2>
+<p>Here is the inner engine of <code>runLoop()</code>, lightly trimmed. Read it slowly; almost everything Pi does at runtime passes through these lines.</p>
+<pre class="code" data-lang="ts"><code>// packages/agent/src/agent-loop.ts
+while (hasMoreToolCalls || pendingMessages.length &gt; 0) {
+  if (!firstTurn) await emit({ type: "turn_start" });
+  else firstTurn = false;
+
+  // 1. stream the assistant's message for this turn
+  const message = await streamAssistantResponse(currentContext, config, signal, emit, streamFn);
+  newMessages.push(message);
+
+  // 2. did the stream end badly? then we're done
+  if (message.stopReason === "error" || message.stopReason === "aborted") {
+    await emit({ type: "turn_end", message, toolResults: [] });
+    await emit({ type: "agent_end", messages: newMessages });
+    return;
+  }
+
+  // 3. pull the tool calls out of the assistant message
+  const toolCalls = message.content.filter((c) =&gt; c.type === "toolCall");
+
+  const toolResults: ToolResultMessage[] = [];
+  hasMoreToolCalls = false;
+  if (toolCalls.length &gt; 0) {
+    const executedToolBatch = await executeToolCalls(currentContext, message, config, signal, emit);
+    toolResults.push(...executedToolBatch.messages);
+    hasMoreToolCalls = !executedToolBatch.terminate;
+
+    // 4. append every result back onto the running context
+    for (const result of toolResults) {
+      currentContext.messages.push(result);
+      newMessages.push(result);
+    }
+  }
+
+  await emit({ type: "turn_end", message, toolResults });
+  // 5. check stop conditions, poll steering… then loop
+}</code></pre>
+<p>Trace one lap. Pi emits <code>turn_start</code>, then <code>streamAssistantResponse()</code> produces the turn's assistant <code>message</code>, each carrying a <code>stopReason</code>. If that reason is <code>error</code> or <code>aborted</code>, the loop ends right there. Otherwise Pi filters the message content for <code>toolCall</code> blocks — this one line, <code>message.content.filter(c =&gt; c.type === "toolCall")</code>, is how Pi discovers what the model wants to do. If there are any, <code>executeToolCalls()</code> runs them and returns a batch of <code>toolResult</code> messages, which get pushed onto <code>currentContext.messages</code>. Emit <code>turn_end</code>, check whether to stop, and if not, loop — and next time around the model sees its own request <em>and</em> the results it produced.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-from-chat-to-agent-2.png" alt="One lap: stream the assistant message, extract its tool calls, execute them, append the results, and loop so the model c" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-from-chat-to-agent-2.png"><span class="fig-ph">figure rendering &middot; One lap: stream the assistant message, extract its tool calls, execute</span></div><figcaption>One lap: stream the assistant message, extract its tool calls, execute them, append the results, and loop so the model can react to what it just did.</figcaption></figure>
+<p>Notice what is <em>not</em> here: there is no turn counter, no <code>maxTurns</code>, no ceiling. Pi does not stop after N iterations. It stops when — and only when — one of three real conditions is met.</p>
+<h2 id="the-three-ways-a-loop-ends">The three ways a loop ends</h2>
+<p>An agent with no stop condition either spins forever or halts too early. Pi has exactly three exits, and it's worth memorizing them because they are the entire contract for "the agent is done."<label for="sn-pi-from-chat-to-agent-2" class="sn-ref">2</label><input type="checkbox" id="sn-pi-from-chat-to-agent-2" class="sn-toggle"><span class="sidenote"><sup>2</sup> There's a fourth, quieter guardrail inside <code>executeToolCalls()</code>: if every tool in a batch returns a result flagged <code>terminate</code>, the batch sets <code>terminate: true</code>, <code>hasMoreToolCalls</code> becomes false, and the loop falls through to its stop-check. A tool can, in effect, ask the loop to wind down.</span></p>
+<p><strong>One — the stream itself ended badly.</strong> If <code>message.stopReason === "error"</code> or <code>"aborted"</code>, the loop returns immediately. This is the path an interrupt takes: an <code>AbortSignal</code> is threaded through the entire chain — into <code>streamAssistantResponse</code>, into <code>executeToolCalls</code>, down to the tools — and when it fires, the stream yields <code>stopReason: "aborted"</code> and the loop exits cleanly. There is no <code>kill</code>; there is a signal everyone downstream honors.</p>
+<p><strong>Two — the host asked to stop.</strong> After each turn Pi awaits <code>config.shouldStopAfterTurn?.({ message, toolResults, context, newMessages })</code>. If that returns true, the loop emits <code>agent_end</code> and returns. This is the hook a surface (the TUI, a script, a subagent runner) uses to say "one turn was enough" without touching the loop's internals.</p>
+<p><strong>Three — there is genuinely nothing left to do.</strong> This is the ordinary, happy ending. The inner <code>while (hasMoreToolCalls || pendingMessages.length &gt; 0)</code> falls through when the last assistant message asked for <em>no tools</em> and there are no queued <strong>steering</strong> messages. When it falls through, the outer loop polls <code>config.getFollowUpMessages?.()</code> one last time; if that's empty too, <code>runLoop</code> breaks and emits <code>agent_end</code>. No tool calls, no pending steering, no follow-up — done.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-from-chat-to-agent-3.png" alt="Pi's loop has no hard turn limit. It ends on exactly three signals: a bad/aborted stream, the host's shouldStopAfterTurn" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-from-chat-to-agent-3.png"><span class="fig-ph">figure rendering &middot; Pi's loop has no hard turn limit. It ends on exactly three signals: a </span></div><figcaption>Pi's loop has no hard turn limit. It ends on exactly three signals: a bad/aborted stream, the host's shouldStopAfterTurn hook, or an honest run-out of work.</figcaption></figure>
+<p>That absence of a max-turns cap is a deliberate design choice. Pi trusts the model's own signal (no more tool calls) plus an explicit host veto, rather than an arbitrary number that would either cut real work short or fail to catch a genuine runaway. Control is inverted: the loop keeps going as long as work keeps arriving, and the <em>agent</em> — not a counter — decides it's finished.</p>
+<h2 id="how-a-tool-result-finds-its-way-home">How a tool result finds its way home</h2>
+<p>For the loop to work, a result the model gets on lap three must be recognizably the answer to the request it made on lap two. Pi does this by ID, not by position. A Pi tool result is a message:</p>
+<pre class="code" data-lang="ts"><code>{ role: "toolResult", toolCallId, toolName, content, details, isError, timestamp }</code></pre>
+<p>The <code>toolCallId</code> matches the <code>id</code> of the <code>toolCall</code> block in the assistant message that requested it. That's the thread. Because everything is keyed on IDs, Pi can run a whole batch of tools <strong>in parallel</strong> — <code>executeToolCalls()</code> defaults to <code>Promise.all</code> over the batch — and still stitch each result back to the exact call it answers, in any order they finish. A slow <code>bash</code> and a fast <code>read</code> return whenever they return; the IDs keep them straight.</p>
+<p>The message roles themselves are a small, fixed vocabulary. From the model's side there are three — <code>user</code>, <code>assistant</code>, <code>toolResult</code> — and then Pi layers on its own harness-native kinds: <code>bashExecution</code>, <code>compactionSummary</code>, <code>branchSummary</code>, and a catch-all <code>custom</code>. Those extra roles are how Pi records things the raw chat protocol has no word for, like "here's the summary that replaced 200 turns of history" (<code>compactionSummary</code>).</p>
+<h2 id="the-loop-is-linear-the-harness-remembers-a-tree">The loop is linear; the harness remembers a tree</h2>
+<p>Here is the subtlety that makes Pi more than a chatbot, and it's worth slowing down for. Inside <code>runLoop()</code>, the conversation is a <strong>flat array</strong>: <code>currentContext.messages</code>, an <code>AgentMessage[]</code>. The loop pushes onto it and reads from it as a simple list. As far as the loop knows, history is a straight line.</p>
+<p>But that flat array is not where Pi actually <em>stores</em> your session. The harness (<code>packages/agent/src/harness/agent-harness.ts</code>) keeps a <strong>tree</strong> of <code>SessionTreeEntry</code> nodes — each entry has an <code>id</code> and a <code>parentId</code>, so entries form branches, not a line:</p>
+<pre class="code" data-lang="ts"><code>// packages/agent/src/harness/types.ts
+export interface SessionTreeEntryBase {
+  type: string;
+  id: string;
+  parentId: string | null;   // ← this is what makes it a tree
+  timestamp: string;
+}</code></pre>
+<p>A message is just one node type (<code>MessageEntry</code>); others record a model switch, a compaction, a branch summary. When it's time to run the loop, <code>session.buildContext()</code> walks the current branch from leaf to root and <em>flattens</em> it into the plain <code>AgentMessage[]</code> the loop consumes. The tree is the truth; the array is a view of one path through it.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/pi-from-chat-to-agent-4.png" alt="The loop only ever sees a flat message list. The harness stores a branching tree of entries and flattens the current bra" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="pi-from-chat-to-agent-4.png"><span class="fig-ph">figure rendering &middot; The loop only ever sees a flat message list. The harness stores a bran</span></div><figcaption>The loop only ever sees a flat message list. The harness stores a branching tree of entries and flattens the current branch into that list — which is exactly what makes fork, clone, and branch navigation possible.</figcaption></figure>
+<p>Why bother? Because a tree is what lets you <em>fork</em> a session, <em>clone</em> it, or <em>rewind</em> to an earlier point and try a different path — every branch is just a different route from root to leaf, and each one flattens into its own valid conversation. If Pi stored only the flat array, there'd be nothing to branch. The line the loop runs on is a projection; the tree is what makes exploration possible.</p>
+<h2 id="phases-the-loop-doesn-t-run-alone">Phases: the loop doesn't run alone</h2>
+<p>One last frame. The harness runs the whole thing through a small phase machine — <code>idle → turn → idle</code>, with <code>compaction</code> and <code>branch_summary</code> as the two other states it can enter. A guard enforces it: prompt the harness while it isn't <code>idle</code> and it throws <code>AgentHarnessError("busy")</code>. So a session is idle, you send a prompt, it flips to <code>turn</code> and spins <code>runLoop()</code> until one of the three exits fires, then it settles back to idle — unless a long history triggers a <code>compaction</code> pass in between. The loop is the engine; the phases are the gearbox around it.</p>
+<h2 id="what-you-built-and-what-it-still-needs">What you built, and what it still needs</h2>
+<p>We now have the real heart of Pi: <code>runLoop()</code>, an outer <code>while(true)</code> around an inner turn loop, ending on a bad stream, a host veto, or an honest run-out of work — no turn counter in sight. We know a <code>toolResult</code> threads back to its <code>toolCall</code> by <code>id</code>, that batches run in parallel, and that the flat array the loop sees is a flattened branch of a much richer session tree.</p>
+<p>What the loop <em>assumes</em> but doesn't provide is the machinery hanging off it. It calls <code>executeToolCalls()</code> — but what is a Pi tool, exactly, and how is it defined? It filters for <code>toolCall</code> blocks — but which tools even exist? That's the next layer: <a href="pi-the-toolbox.html" target="_blank" rel="noopener">the toolbox</a>, where we open the tools Pi ships with and the exact shape every tool must take. From there we look at <a href="pi-tool-safety.html" target="_blank" rel="noopener">tool safety</a> — the <code>tool_call</code> hook that fires <em>before</em> a tool runs — and step back to see <a href="pi-how-it-all-fits.html" target="_blank" rel="noopener">how it all fits</a>.</p></div>
+<div class="prevnext"><a class="pn prev" href="pi-how-it-all-fits.html"><span>‹ previous</span>Pi from scratch: the plan</a><a class="pn next" href="pi-the-toolbox.html"><span>next ›</span>The toolbox: giving Pi hands</a></div>
+</article></main>
+</div>
+<div class="search-modal" id="search-modal"><div class="search-box">
+  <input id="search-input" placeholder="Search articles, terms, kernels…" autocomplete="off">
+  <div id="search-results"></div>
+  <div class="search-hint">↑↓ to navigate · ↵ to open · esc to close</div>
+</div></div>
+<script>window.SEARCH_BASE="../";</script>
+<script src="../assets/app.js"></script>
+</body></html>
