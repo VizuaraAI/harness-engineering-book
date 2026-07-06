@@ -18,10 +18,129 @@
 </div>
 <div class="layout">
 <nav class="sidebar" id="sidebar"><a class="sb-home" href="../index.html">‹ kernel engineering</a><details class="sb-sec"><summary><span class="sb-num">00</span> Start Here</summary><a class="sb-item" href="../a/what-is-a-harness.html">What is a harness?</a><a class="sb-item" href="../a/why-just-call-the-api-fails.html">Why 'just call the API' fails</a><a class="sb-item" href="../a/prompt-vs-context-vs-harness.html">Prompt vs. context vs. harness engineering</a><a class="sb-item" href="../a/the-five-layers.html">The anatomy: five layers of a harness<span class="chip">MAP</span></a><a class="sb-item" href="../a/what-you-will-build.html">What you will build: a pi-style harness</a><a class="sb-item" href="../a/how-to-use-this-site.html">How to use this site</a></details><details class="sb-sec"><summary><span class="sb-num">01</span> The Agent Loop</summary><a class="sb-item" href="../a/the-agent-loop-from-first-principles.html">The agent loop from first principles<span class="chip">LOOP</span></a><a class="sb-item" href="../a/messages-turns-and-roles.html">Messages, turns &amp; roles</a><a class="sb-item" href="../a/stop-conditions.html">Stop conditions: when does the loop end?</a><a class="sb-item" href="../a/streaming-responses.html">Streaming responses into a terminal</a><a class="sb-item" href="../a/the-model-client.html">The model client &amp; provider abstraction</a><a class="sb-item" href="../a/your-first-bare-harness.html">Build: your first bare harness<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">02</span> Tools &amp; the Execution Environment</summary><a class="sb-item" href="../a/tool-schemas-as-contracts.html">Tool schemas as contracts<span class="chip">TOOLS</span></a><a class="sb-item" href="../a/the-core-file-and-shell-tools.html">The core tools: read, write, edit, bash, search</a><a class="sb-item" href="../a/streaming-tool-calls-to-the-ui.html">Streaming tool calls to the UI</a><a class="sb-item" href="../a/permission-gates-and-approval-modes.html">Permission gates &amp; approval modes</a><a class="sb-item" href="../a/sandboxing-and-blast-radius.html">Sandboxing &amp; the blast-radius problem</a><a class="sb-item" href="../a/code-mode-vs-tool-mode.html">Code-mode vs. tool-mode</a></details><details class="sb-sec"><summary><span class="sb-num">03</span> Context Engineering</summary><a class="sb-item" href="../a/the-context-window-as-a-resource.html">The context window as a resource<span class="chip">CONTEXT</span></a><a class="sb-item" href="../a/context-budgets.html">Context budgets: what goes in, what gets evicted</a><a class="sb-item" href="../a/compaction-and-summarization.html">Compaction &amp; summarization</a><a class="sb-item" href="../a/memory-and-claude-md.html">Memory systems &amp; the CLAUDE.md pattern</a><a class="sb-item" href="../a/system-prompts-as-infrastructure.html">System prompts as infrastructure, not prose</a><a class="sb-item" href="../a/building-the-context-engine.html">Build: the context engine<span class="chip">BUILD</span></a></details><details class="sb-sec" open><summary><span class="sb-num">04</span> Durability, Recovery &amp; Orchestration</summary><a class="sb-item" href="../a/durable-execution-and-checkpointing.html">Durable execution &amp; checkpointing<span class="chip">DURABLE</span></a><a class="sb-item" href="../a/replay-and-resumable-sessions.html">Replay &amp; resumable sessions</a><a class="sb-item" href="../a/self-healing-loops.html">Self-healing loops: retries &amp; failure classification</a><a class="sb-item" href="../a/sub-agents-and-handoffs.html">Sub-agents &amp; handoffs</a><a class="sb-item" href="../a/supervision-and-plan-mode.html">Supervision &amp; plan mode</a><a class="sb-item active" href="../a/human-in-the-loop.html">Human-in-the-loop: plans, approvals, escalation<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">05</span> Production Harnesses &amp; Capstone</summary><a class="sb-item" href="../a/pi-internals.html">pi internals: the minimal-surface philosophy<span class="chip">pi</span></a><a class="sb-item" href="../a/hermes-internals.html">Hermes internals: a research lab's harness<span class="chip">HERMES</span></a><a class="sb-item" href="../a/claude-code-internals.html">Claude Code internals: skills, hooks, MCP, sub-agents<span class="chip">CC</span></a><a class="sb-item" href="../a/evaluating-a-harness.html">Evaluating a harness: how you know yours works</a><a class="sb-item" href="../a/the-capstone.html">The capstone: your own harness<span class="chip">SHIP</span></a></details></nav>
-<main class="content"><article class="worklog stub">
+<main class="content"><article class="worklog">
 <div class="art-kicker"><span class="art-sec">04 · Durability, Recovery &amp; Orchestration</span></div>
 <h1 class="art-title">Human-in-the-loop: plans, approvals, escalation <span class="chip lg">BUILD</span></h1>
-<div class="art-body"><p class="lead">Some actions should wait for a human. Building the approval gate and escalation path, and the checkpointed dispatcher that ties durability and orchestration together.</p><div class="stub">This worklog is being written. It will follow the hypothesis → measure → figure rhythm of the rest of the site.</div></div>
+<div class="art-body"><p>By now your harness can do frightening things unattended. It can edit files, run shell commands, push to git, and — after <a href="durable-execution-and-checkpointing.html" target="_blank" rel="noopener">durable execution</a> and <a href="self-healing-loops.html" target="_blank" rel="noopener">self-healing loops</a> — it can do them across crashes and flaky APIs without your hand on the wheel. That is exactly the power we wanted, and exactly the power that should make you nervous. Some actions are cheap to undo and fine to automate. Others — deleting a branch, deploying to production, emailing a customer, running a migration — are the kind you want a human to <em>look at first</em>. This chapter is about building that pause: an <strong>approval gate</strong> that stops the durable loop cold, surfaces the proposed action to a person, and resumes only when they say yes.</p>
+<p>This is the capstone of Day 4, and it is where the two systems we built this section finally click together. <a href="durable-execution-and-checkpointing.html" target="_blank" rel="noopener">Durability</a> taught the loop to survive a crash by treating every step as a logged, replayable event. <a href="sub-agents-and-handoffs.html" target="_blank" rel="noopener">Orchestration</a> taught a supervisor to dispatch work to sub-agents. A human-in-the-loop gate is what happens when you realize that <em>waiting for a person</em> is just another kind of durability: the loop has to survive not a crash, but a coffee break — possibly a long one — and come back exactly where it was.</p>
+<h2 id="why-just-prompt-the-user-isn-t-enough">Why "just prompt the user" isn't enough</h2>
+<p>The naive version is a one-liner. Before the dangerous tool runs, print the command and call <code>input()</code>:</p>
+<pre class="code" data-lang="python"><code>if is_dangerous(cmd):
+    ans = input(f"Run `{cmd}`? [y/N] ")
+    if ans.lower() != "y":
+        return "denied by user"</code></pre>
+<p>This works right up until you remember what the loop is now. The agent is a <strong>durable, replayable process</strong>, and it might be running headless — in CI, on a server, triggered by a webhook — with no terminal attached and no human standing by. A blocking <code>input()</code> assumes a synchronous human at your keyboard, which is the one assumption a real harness can't make.<label for="sn-human-in-the-loop-1" class="sn-ref">1</label><input type="checkbox" id="sn-human-in-the-loop-1" class="sn-toggle"><span class="sidenote"><sup>1</sup> This is why Claude Code has both an interactive TUI <em>and</em> a headless <code>-p</code> mode, and why "approval mode" is a first-class setting rather than a prompt. The gate has to work when nobody is watching the terminal — the decision might arrive from a Slack button, a web dashboard, or a teammate three time zones away.</span> Worse: <code>input()</code> blocks the whole process. If the human takes an hour, your process holds an hour of memory, connections, and state, and if it crashes while waiting, the pending approval evaporates.</p>
+<p>So the real requirement isn't "ask the user." It's this: <strong>pause the durable loop, persist that we are waiting on a specific proposed action, release the process entirely, and resume — possibly in a fresh process, possibly much later — the instant a decision arrives.</strong> The approval isn't a prompt. It's a <em>checkpoint</em>.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/human-in-the-loop-1.png" alt="A blocking prompt holds the whole process hostage and loses the approval on crash. A durable gate logs the pending actio" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="human-in-the-loop-1.png"><span class="fig-ph">figure rendering &middot; A blocking prompt holds the whole process hostage and loses the approv</span></div><figcaption>A blocking prompt holds the whole process hostage and loses the approval on crash. A durable gate logs the pending action, releases the process, and resumes from the log when a decision arrives from anywhere.</figcaption></figure>
+<h2 id="the-mental-model-a-gate-is-a-step-that-can-suspend">The mental model: a gate is a step that can suspend</h2>
+<p>Recall from <a href="durable-execution-and-checkpointing.html" target="_blank" rel="noopener">durable execution</a> that every model call and every tool call is a <strong>step</strong> funneled through <code>run_step</code>, which either executes-and-logs or returns-from-log. An approval gate is one more kind of step — but a special one, because it has a third outcome besides "done" and "replay." It can be <strong>pending</strong>.</p>
+<p>A normal step has two states in the log: absent (run it now) or present-with-result (replay it). An approval gate needs three:</p>
+<ul><li><strong>absent</strong> — we haven't proposed this action yet. Propose it: write a <code>pending</code> record to the log and <em>suspend the loop</em>.</li><li><strong>pending</strong> — we proposed it but no decision has landed. Stay suspended; there is nothing to do but wait.</li><li><strong>resolved</strong> (approved or denied) — a human answered. Replay that decision like any other logged result and continue.</li></ul>
+<p>That third state is the whole trick. Suspension isn't a crash and it isn't completion — it's a deliberate, durable "come back later." Because the pending record lives in the same append-only log as everything else, a crash while suspended costs nothing: on restart we replay the log, hit the still-<code>pending</code> gate, and suspend again. The human's eventual "yes" appends <code>approved</code> and lets replay sail past it.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/human-in-the-loop-2.png" alt="An approval gate is a three-state step: absent (propose and suspend), pending (wait, crash-safe), and resolved (replay t" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="human-in-the-loop-2.png"><span class="fig-ph">figure rendering &middot; An approval gate is a three-state step: absent (propose and suspend), </span></div><figcaption>An approval gate is a three-state step: absent (propose and suspend), pending (wait, crash-safe), and resolved (replay the human's decision and continue).</figcaption></figure>
+<h2 id="building-the-gate">Building the gate</h2>
+<p>Let me build it in the shape of the durability layer from the last chapter, so it drops straight into the loop we already have. First, a tiny classifier for which actions even need a gate — most don't, and gating everything would make the agent useless.</p>
+<pre class="code" data-lang="python"><code>DANGEROUS = ("git push", "rm ", "deploy", "drop table", "curl -X POST", "migrate")
+
+def needs_approval(tool_name, args):
+    if tool_name == "write_file":
+        return False                     # cheap to undo; let it run
+    if tool_name == "run_bash":
+        cmd = args.get("cmd", "")
+        return any(d in cmd for d in DANGEROUS)
+    return False</code></pre>
+<p>This is deliberately crude — a substring blocklist. Real harnesses layer this with the <a href="permission-gates-and-approval-modes.html" target="_blank" rel="noopener">permission modes</a> from Layer 2 (an allowlist the user can extend, a "yolo mode" that skips gates, a per-project <code>settings.json</code>).<label for="sn-human-in-the-loop-2" class="sn-ref">2</label><input type="checkbox" id="sn-human-in-the-loop-2" class="sn-toggle"><span class="sidenote"><sup>2</sup> Claude Code's permission system is exactly this idea grown up: <code>allow</code>/<code>ask</code>/<code>deny</code> rules matched against tool calls, plus modes like <code>acceptEdits</code> and <code>bypassPermissions</code>. The gate we build here is the durable <em>mechanism</em> underneath those policies — the policy decides <em>whether</em> to ask, the gate decides <em>how to wait</em> for the answer.</span> Here we keep the policy dumb so the <em>waiting mechanism</em> stays in focus.</p>
+<p>Now the gate itself. It reads and writes the same <code>EventLog</code> as every other step, keyed by a stable <code>step_id</code>.</p>
+<pre class="code" data-lang="python"><code>class Suspend(Exception):
+    """Raised to unwind the loop cleanly when we're waiting on a human."""
+    def __init__(self, request_id):
+        self.request_id = request_id
+
+def approval_gate(log, step_id, action_desc):
+    rec = log.find(step_id)                      # look for an existing decision
+
+    if rec is None:                              # ABSENT → propose + suspend
+        log.append({
+            "step_id": step_id,
+            "kind": "approval",
+            "status": "pending",
+            "action": action_desc,
+            "requested_at": now(),
+        })
+        log.flush()                              # durable BEFORE we release
+        notify_humans(step_id, action_desc)      # Slack / dashboard / email
+        raise Suspend(step_id)                    # unwind — free the process
+
+    if rec["status"] == "pending":               # PENDING → still waiting
+        raise Suspend(step_id)                    # replay landed us here; re-suspend
+
+    return rec["status"] == "approved"           # RESOLVED → True/False, continue</code></pre>
+<p>Three branches, one per state. Notice the ordering echoes the idempotency lesson from durability: we <code>flush()</code> the <code>pending</code> record to disk <em>before</em> we notify anyone or release the process, so the request can never be lost in the gap. Notice too that we don't call <code>input()</code> — we <code>raise Suspend</code>, which unwinds the loop entirely. The process is free to exit. Whatever's driving the harness (a job runner, a server) catches <code>Suspend</code> at the top, records "run X is parked on approval Y," and moves on to other work.</p>
+<p>The decision arrives out-of-band. A human clicks <em>approve</em> in a dashboard, which calls one function:</p>
+<pre class="code" data-lang="python"><code>def resolve(log, step_id, approved, reviewer):
+    log.append({
+        "step_id": step_id,
+        "kind": "approval",
+        "status": "approved" if approved else "denied",
+        "reviewer": reviewer,
+        "decided_at": now(),
+    })
+    log.flush()
+    wake_run(log.run_id)     # re-enqueue the suspended run to resume</code></pre>
+<p>Because the log is append-only, we don't mutate the <code>pending</code> record — we append the resolution and let <code>log.find</code> return the <em>latest</em> record for that <code>step_id</code>. Same discipline as everywhere else: one durable artifact, only ever grown, never edited.</p>
+<h2 id="wiring-it-into-the-loop">Wiring it into the loop</h2>
+<p>Here is the durable loop from the last chapter, now with a gate in front of side-effecting tools. The change is small — that's the point.</p>
+<pre class="code" data-lang="python"><code>def run_agent(log, user_request):
+    messages = rebuild_messages(log) or [{"role": "user", "content": user_request}]
+    turn = start_turn(log)
+
+    while True:
+        reply = run_step(log, f"model:{turn}",
+                         lambda: call_model(messages, TOOLS))
+        messages.append({"role": "assistant", "content": reply["content"]})
+        if reply["stop_reason"] != "tool_use":
+            return text_of(reply)
+
+        results = []
+        for i, block in enumerate(tool_uses(reply)):
+            gate_id = f"gate:{turn}:{i}:{block['id']}"
+
+            if needs_approval(block["name"], block["input"]):
+                if not approval_gate(log, gate_id, describe(block)):
+                    # denied — don't run it, tell the model why
+                    results.append(denied_result(block, "human declined this action"))
+                    continue
+
+            out = run_step(log, f"tool:{turn}:{i}:{block['id']}",
+                           lambda: run_tool(block["name"], block["input"]))
+            results.append(tool_result(block, out))
+
+        messages.append({"role": "user", "content": results})
+        turn += 1</code></pre>
+<p>Trace the full life of one gated action. The model asks to <code>run_bash("git push")</code>. <code>needs_approval</code> returns <code>True</code>, so we call <code>approval_gate</code>. First time through, the gate finds no record, writes <code>pending</code>, notifies a human, and raises <code>Suspend</code> — the loop unwinds, the process exits, the run is parked. Hours later a reviewer approves; <code>resolve</code> appends <code>approved</code> and wakes the run. A <strong>fresh process</strong> rebuilds <code>messages</code> by replaying the log and re-runs the loop. Every prior <code>run_step</code> replays from cache in milliseconds — no re-billing, no re-running the tests. It reaches the gate again; this time <code>approval_gate</code> finds <code>approved</code> and returns <code>True</code>. The <code>git push</code> finally runs, as its own logged step, and the loop continues as if nothing had paused.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/human-in-the-loop-3.png" alt="One gated action across two processes: the first proposes, logs, and suspends; a human approves out-of-band; a fresh pro" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="human-in-the-loop-3.png"><span class="fig-ph">figure rendering &middot; One gated action across two processes: the first proposes, logs, and s</span></div><figcaption>One gated action across two processes: the first proposes, logs, and suspends; a human approves out-of-band; a fresh process replays the log for free, finds the approval, and runs the action.</figcaption></figure>
+<h2 id="deny-is-not-the-end-it-s-feedback">Deny is not the end — it's feedback</h2>
+<p>A subtle but important choice sits in that loop: when the human <em>denies</em>, we don't crash the run and we don't silently drop the action. We feed a <code>tool_result</code> back to the model saying the action was declined. That turns denial into a conversational signal. A good agent, told "the human declined <code>git push</code>," will adapt — ask why, propose a smaller step, or explain what it was trying to accomplish and let the human redirect it.<label for="sn-human-in-the-loop-3" class="sn-ref">3</label><input type="checkbox" id="sn-human-in-the-loop-3" class="sn-toggle"><span class="sidenote"><sup>3</sup> This is the difference between a gate that <em>blocks</em> an agent and a gate that <em>steers</em> it. The denial message is a great place to include the reviewer's note ("not until CI is green") so the model can act on the actual reason rather than just retrying the same thing and getting denied again.</span> Denial isn't punishment; it's the human editing the plan mid-flight, which is the entire reason a human is in the loop.</p>
+<h2 id="escalation-gate-before-the-act-and-escalate-after-the-fail">Escalation: gate before the act, and escalate after the fail</h2>
+<p>Approval gates handle the actions you can anticipate. But durable agents also hit situations nobody can pre-classify — a migration that half-applied, a test suite that's been red for twenty minutes, a self-heal loop that has retried the same 500 five times. For those you want the mirror image of an approval gate: <strong>escalation</strong>. Where a gate pauses <em>before</em> a risky action to ask permission, escalation pauses <em>after</em> the agent decides it's stuck, to ask for help.</p>
+<p>Mechanically it's the same suspend-and-resume machinery, triggered from a different place. When the <a href="self-healing-loops.html" target="_blank" rel="noopener">self-healing loop</a> exhausts its retries, or a step blows a budget, or the agent's confidence check fails, it raises the same <code>Suspend</code> — but the pending record carries the <em>context</em> of the failure instead of a proposed action, and the human's "resume" carries a <em>hint</em> back into the loop.</p>
+<pre class="code" data-lang="python"><code>def escalate(log, step_id, reason, context):
+    rec = log.find(step_id)
+    if rec is None:
+        log.append({"step_id": step_id, "kind": "escalation",
+                    "status": "open", "reason": reason, "context": context})
+        log.flush()
+        notify_humans(step_id, f"AGENT STUCK: {reason}", context)
+        raise Suspend(step_id)
+    if rec["status"] == "open":
+        raise Suspend(step_id)
+    return rec["guidance"]          # human's hint, fed back into the loop</code></pre>
+<p>The difference from a gate is what flows back: a gate returns a boolean, an escalation returns <em>guidance</em> — a string the loop injects as a <code>user</code> message so the model can try again with human insight it couldn't derive on its own. This is how you get an agent that runs long and unattended but still knows how to <em>stop and ask</em> instead of thrashing forever or, worse, guessing.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/human-in-the-loop-4.png" alt="Approval gates and escalation are the same durable-suspend mechanism pointed in opposite directions: a gate asks permiss" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="human-in-the-loop-4.png"><span class="fig-ph">figure rendering &middot; Approval gates and escalation are the same durable-suspend mechanism p</span></div><figcaption>Approval gates and escalation are the same durable-suspend mechanism pointed in opposite directions: a gate asks permission before a risky action and returns yes/no; escalation asks for help after the agent is stuck and returns guidance.</figcaption></figure>
+<h2 id="the-capstone-a-checkpointed-dispatcher-with-an-approval-gate">The capstone: a checkpointed dispatcher with an approval gate</h2>
+<p>Step back and look at what Day 4 assembled. The <a href="durable-execution-and-checkpointing.html" target="_blank" rel="noopener">durable dispatcher</a> gives you a loop where every step is logged and replayable. <a href="self-healing-loops.html" target="_blank" rel="noopener">Self-healing</a> lets that loop survive its own transient errors. <a href="sub-agents-and-handoffs.html" target="_blank" rel="noopener">Sub-agents</a> let a supervisor fan work out to child runs. And now the approval gate and escalation give the human a seat <em>inside</em> that machinery — not bolted on as a blocking prompt, but woven in as a durable step that can suspend and resume like any other.</p>
+<p>The synthesis fits in one sentence: <strong>a human-in-the-loop harness is a checkpointed dispatcher in which some steps are permitted to pend on a human, and the human's decision is just another logged event that replay carries forward.</strong> The same <code>EventLog</code> that survives a crash survives a coffee break; the same replay that recovers a dead process resumes from an approval. You didn't build a separate "approval system" — you noticed a human's judgment is one more thing worth checkpointing, and spent it through machinery you already had.</p>
+<p>That's the durable, orchestrated, human-supervised harness. It acts on its own when it's safe, waits for you when it isn't, and asks for help when it's lost — without ever holding a process hostage or losing its place. From here the remaining question isn't <em>how</em> the harness runs, but how you <em>watch</em> it run: observability, tracing, and evals. That's the next section.</p></div>
 <div class="prevnext"><a class="pn prev" href="supervision-and-plan-mode.html"><span>‹ previous</span>Supervision &amp; plan mode</a><a class="pn next" href="pi-internals.html"><span>next ›</span>pi internals: the minimal-surface philosophy</a></div>
 </article></main>
 </div>

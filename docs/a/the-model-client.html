@@ -18,10 +18,118 @@
 </div>
 <div class="layout">
 <nav class="sidebar" id="sidebar"><a class="sb-home" href="../index.html">‹ kernel engineering</a><details class="sb-sec"><summary><span class="sb-num">00</span> Start Here</summary><a class="sb-item" href="../a/what-is-a-harness.html">What is a harness?</a><a class="sb-item" href="../a/why-just-call-the-api-fails.html">Why 'just call the API' fails</a><a class="sb-item" href="../a/prompt-vs-context-vs-harness.html">Prompt vs. context vs. harness engineering</a><a class="sb-item" href="../a/the-five-layers.html">The anatomy: five layers of a harness<span class="chip">MAP</span></a><a class="sb-item" href="../a/what-you-will-build.html">What you will build: a pi-style harness</a><a class="sb-item" href="../a/how-to-use-this-site.html">How to use this site</a></details><details class="sb-sec" open><summary><span class="sb-num">01</span> The Agent Loop</summary><a class="sb-item" href="../a/the-agent-loop-from-first-principles.html">The agent loop from first principles<span class="chip">LOOP</span></a><a class="sb-item" href="../a/messages-turns-and-roles.html">Messages, turns &amp; roles</a><a class="sb-item" href="../a/stop-conditions.html">Stop conditions: when does the loop end?</a><a class="sb-item" href="../a/streaming-responses.html">Streaming responses into a terminal</a><a class="sb-item active" href="../a/the-model-client.html">The model client &amp; provider abstraction</a><a class="sb-item" href="../a/your-first-bare-harness.html">Build: your first bare harness<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">02</span> Tools &amp; the Execution Environment</summary><a class="sb-item" href="../a/tool-schemas-as-contracts.html">Tool schemas as contracts<span class="chip">TOOLS</span></a><a class="sb-item" href="../a/the-core-file-and-shell-tools.html">The core tools: read, write, edit, bash, search</a><a class="sb-item" href="../a/streaming-tool-calls-to-the-ui.html">Streaming tool calls to the UI</a><a class="sb-item" href="../a/permission-gates-and-approval-modes.html">Permission gates &amp; approval modes</a><a class="sb-item" href="../a/sandboxing-and-blast-radius.html">Sandboxing &amp; the blast-radius problem</a><a class="sb-item" href="../a/code-mode-vs-tool-mode.html">Code-mode vs. tool-mode</a></details><details class="sb-sec"><summary><span class="sb-num">03</span> Context Engineering</summary><a class="sb-item" href="../a/the-context-window-as-a-resource.html">The context window as a resource<span class="chip">CONTEXT</span></a><a class="sb-item" href="../a/context-budgets.html">Context budgets: what goes in, what gets evicted</a><a class="sb-item" href="../a/compaction-and-summarization.html">Compaction &amp; summarization</a><a class="sb-item" href="../a/memory-and-claude-md.html">Memory systems &amp; the CLAUDE.md pattern</a><a class="sb-item" href="../a/system-prompts-as-infrastructure.html">System prompts as infrastructure, not prose</a><a class="sb-item" href="../a/building-the-context-engine.html">Build: the context engine<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">04</span> Durability, Recovery &amp; Orchestration</summary><a class="sb-item" href="../a/durable-execution-and-checkpointing.html">Durable execution &amp; checkpointing<span class="chip">DURABLE</span></a><a class="sb-item" href="../a/replay-and-resumable-sessions.html">Replay &amp; resumable sessions</a><a class="sb-item" href="../a/self-healing-loops.html">Self-healing loops: retries &amp; failure classification</a><a class="sb-item" href="../a/sub-agents-and-handoffs.html">Sub-agents &amp; handoffs</a><a class="sb-item" href="../a/supervision-and-plan-mode.html">Supervision &amp; plan mode</a><a class="sb-item" href="../a/human-in-the-loop.html">Human-in-the-loop: plans, approvals, escalation<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">05</span> Production Harnesses &amp; Capstone</summary><a class="sb-item" href="../a/pi-internals.html">pi internals: the minimal-surface philosophy<span class="chip">pi</span></a><a class="sb-item" href="../a/hermes-internals.html">Hermes internals: a research lab's harness<span class="chip">HERMES</span></a><a class="sb-item" href="../a/claude-code-internals.html">Claude Code internals: skills, hooks, MCP, sub-agents<span class="chip">CC</span></a><a class="sb-item" href="../a/evaluating-a-harness.html">Evaluating a harness: how you know yours works</a><a class="sb-item" href="../a/the-capstone.html">The capstone: your own harness<span class="chip">SHIP</span></a></details></nav>
-<main class="content"><article class="worklog stub">
+<main class="content"><article class="worklog">
 <div class="art-kicker"><span class="art-sec">01 · The Agent Loop</span></div>
 <h1 class="art-title">The model client &amp; provider abstraction </h1>
-<div class="art-body"><p class="lead">One thin interface over the model API (and why models.json / a provider abstraction keeps the harness model-agnostic, a core pi idea).</p><div class="stub">This worklog is being written. It will follow the hypothesis → measure → figure rhythm of the rest of the site.</div></div>
+<div class="art-body"><p>In <a href="your-first-bare-harness.html" target="_blank" rel="noopener">your first bare harness</a> we cheated, and I told you we were cheating. We wrote <code>client = anthropic.Anthropic()</code> right there in the middle of the loop, hard-coded a model string, and moved on so nothing would distract from the one idea that mattered. That was the right call for teaching the loop. It is the wrong call for a harness you intend to keep. In this chapter we pay off that debt: we pull the model behind <strong>one thin interface</strong>, and in doing so we draw the single most important boundary in the whole system — the line between <em>the model</em> and <em>everything the harness does with it</em>.</p>
+<p>The payoff is concrete. By the end, swapping Anthropic for OpenAI, or Sonnet for a local Ollama model, becomes a config change, not a code change. But the deeper payoff is architectural clarity: once the client is a clean seam, you always know which side of it a given piece of code belongs on. That knowledge is what keeps a harness from turning to mud.</p>
+<h2 id="the-problem-with-calling-the-api-directly">The problem with calling the API directly</h2>
+<p>Start with the naive version and watch it rot. When the model call lives inline in your loop, the loop ends up knowing far too much. It knows the provider's SDK. It knows the exact model string. When the request fails with a <code>529 overloaded</code>, the <em>loop</em> is where you sprout a <code>try/except</code> and a <code>time.sleep</code>. When you want to log how many tokens each turn cost, the token bookkeeping goes... where? Next to the loop. When a teammate wants to try GPT-5 for a week, they are editing your loop.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/the-model-client-1.png" alt="Inline API calls leak provider details into the loop until swapping models means a rewrite. A client seam quarantines al" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="the-model-client-1.png"><span class="fig-ph">figure rendering &middot; Inline API calls leak provider details into the loop until swapping mo</span></div><figcaption>Inline API calls leak provider details into the loop until swapping models means a rewrite. A client seam quarantines all of that on one side of a line the loop never crosses.</figcaption></figure>
+<p>The symptom is easy to name: <strong>provider concerns are leaking into loop concerns.</strong> Every one of those responsibilities — auth, retries, token accounting, response parsing — is about <em>talking to a model</em>, not about <em>running an agent</em>. They have no business sitting next to the loop. So we give them a home.</p>
+<h2 id="one-interface-and-the-pi-lesson-behind-it">One interface, and the pi lesson behind it</h2>
+<p>Here is the whole idea in one sentence: the harness talks to <em>a</em> model through a fixed, tiny interface, and a provider is just a config entry that gets slotted in behind that interface. This is exactly the pattern pi builds its whole model layer on. pi ships with "15+ providers, hundreds of models" — Anthropic, OpenAI, Google, Bedrock, Mistral, Groq, Ollama, OpenRouter, and more — and you add your own with a <strong><code>models.json</code></strong> entry, not a code change.</p>
+<p><label for="sn-the-model-client-1" class="sn-ref">1</label><input type="checkbox" id="sn-the-model-client-1" class="sn-toggle"><span class="sidenote"><sup>1</sup> pi's philosophy is "primitives, not features": the core defines the primitive (a model you can call through a uniform interface) and providers plug in as data. That is why you can <code>/model</code> or <code>Ctrl+L</code> to switch models mid-session — the harness never hard-coded one to begin with. We are building the same primitive, just small enough to read in full.</span></p>
+<p>When pi lets you switch models mid-session with a keystroke, that fluency is not magic; it is the direct reward for having drawn this boundary early.</p>
+<p>Our version of <code>models.json</code> is deliberately boring:</p>
+<pre class="code" data-lang="json"><code>{
+  "default": "sonnet",
+  "models": {
+    "sonnet":  { "provider": "anthropic", "model": "claude-sonnet-4-6", "max_tokens": 4096 },
+    "opus":    { "provider": "anthropic", "model": "claude-opus-4-8",   "max_tokens": 8192 },
+    "gpt":     { "provider": "openai",    "model": "gpt-5",             "max_tokens": 4096 },
+    "local":   { "provider": "ollama",    "model": "qwen2.5-coder",     "base_url": "http://localhost:11434" }
+  }
+}</code></pre>
+<p>Nothing in the loop, the tools, or the context engine will ever read this file. Only the client will. That is the point.</p>
+<h2 id="what-the-client-owns-vs-what-the-loop-owns">What the client owns vs. what the loop owns</h2>
+<p>Before any code, let's be ruthless about the division of labor, because getting this line right is 80% of the value. The <strong>client owns everything about <em>talking to the model</em>.</strong> The <strong>loop owns everything about <em>being an agent</em>.</strong></p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/the-model-client-2.png" alt="The dividing test: provider-specific concerns live in the client; agent-behavior concerns live in the loop. The two meet" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="the-model-client-2.png"><span class="fig-ph">figure rendering &middot; The dividing test: provider-specific concerns live in the client; agen</span></div><figcaption>The dividing test: provider-specific concerns live in the client; agent-behavior concerns live in the loop. The two meet only at a two-method interface.</figcaption></figure>
+<p>Here is the litmus test I actually use. Ask of any line of code: <em>would this change if I switched providers?</em> If yes, it belongs in the client — auth, the SDK object, the retry codes, the shape of the request body, the parsing of the response. Ask instead: <em>would this change if I switched tasks?</em> If yes, it belongs in the loop — when to call, how to read <code>stop_reason</code>, which tools to run, how the <code>messages</code> array grows.</p>
+<p><label for="sn-the-model-client-2" class="sn-ref">2</label><input type="checkbox" id="sn-the-model-client-2" class="sn-toggle"><span class="sidenote"><sup>2</sup> There is one genuinely blurry case: which model to use for a given turn is arguably a <em>policy</em> decision, not a talking-to-the-model detail. Real harnesses often let the loop (or an orchestrator) pass a model <em>name</em> per call — "use the cheap model for this summary, the strong one for the reasoning." We support that below by letting <code>send</code> take an optional model key. The client still owns <em>how</em> to reach that model; the loop owns <em>which</em> one.</span></p>
+<p>Concretely, the client owns four jobs, and I want to name each so it doesn't sneak back into the loop later:</p>
+<p><strong>Auth.</strong> Reading <code>ANTHROPIC_API_KEY</code> or <code>OPENAI_API_KEY</code> from the environment, or running an OAuth flow, and holding the SDK object. The loop should never see a key.</p>
+<p><strong>Retries.</strong> Providers return <code>429 rate limited</code>, <code>529 overloaded</code>, and transient <code>5xx</code>s constantly under load. The client retries these with exponential backoff so the loop only ever sees a clean success or a final, honest failure.</p>
+<p><label for="sn-the-model-client-3" class="sn-ref">3</label><input type="checkbox" id="sn-the-model-client-3" class="sn-toggle"><span class="sidenote"><sup>3</sup> Retries here are the <em>transport</em> kind — resend the identical request when the provider hiccups. That is a different animal from the <em>durability</em> retries in <a href="self-healing-loops.html" target="_blank" rel="noopener">self-healing loops</a>, which replay whole agent steps after a crash. Keep them separate: the client heals the network, the harness heals the run.</span></p>
+<p><strong>Token counting.</strong> Every provider returns usage (<code>input_tokens</code>, <code>output_tokens</code>) on the response. The client is the natural place to tally it, because it is the only code that sees the raw response. The <a href="compaction-and-summarization.html" target="_blank" rel="noopener">context engine</a> will later ask the client "how big is this?" to decide when to compact — so the client also owns a <code>count_tokens</code> helper.</p>
+<p><strong>The request shape.</strong> Each provider wants the request assembled slightly differently — Anthropic takes <code>system</code> as a top-level field and tools as <code>tools</code>; OpenAI folds the system message into the <code>messages</code> array and calls them <code>functions</code>/<code>tools</code> with a different schema. The client translates our <em>one</em> internal request shape into whatever this provider needs, and translates the response <em>back</em> into our one canonical message shape.</p>
+<p>That last job is the subtle one, so let's give it its own moment.</p>
+<h2 id="the-canonical-shape-translate-at-the-edge">The canonical shape: translate at the edge</h2>
+<p>The reason a two-line provider swap is even possible is that the loop speaks exactly one dialect. It always sends a <code>messages</code> list and a <code>tools</code> list; it always gets back an object with a <code>.stop_reason</code> and a <code>.content</code> it can iterate for <code>tool_use</code> blocks. If OpenAI names things differently, that difference must die <em>inside the client</em> — never leak past the seam.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/the-model-client-3.png" alt="The client is a translator: it adapts the harness's one canonical request into each provider's dialect on the way in, an" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="the-model-client-3.png"><span class="fig-ph">figure rendering &middot; The client is a translator: it adapts the harness's one canonical requ</span></div><figcaption>The client is a translator: it adapts the harness's one canonical request into each provider's dialect on the way in, and normalizes every provider's response back to one shape on the way out. The loop never learns a second dialect.</figcaption></figure>
+<h2 id="the-code-a-client-worth-keeping">The code: a client worth keeping</h2>
+<p>Now the interface. It is two methods. <code>send</code> does one turn; <code>count_tokens</code> sizes a message list. That's the entire contract the rest of the harness is allowed to depend on.</p>
+<pre class="code" data-lang="python"><code>import os, time, json, anthropic, openai
+
+class ModelClient:
+    def __init__(self, config_path="models.json"):
+        cfg = json.load(open(config_path))
+        self.models  = cfg["models"]
+        self.default = cfg["default"]
+        self._anthropic = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        self._openai    = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+    def send(self, messages, tools, model=None, system=""):
+        spec = self.models[model or self.default]        # resolve the config entry
+        adapter = getattr(self, f"_send_{spec['provider']}")
+        return self._with_retries(lambda: adapter(spec, messages, tools, system))
+
+    # ---- provider adapters: the ONLY provider-specific code in the whole harness ----
+    def _send_anthropic(self, spec, messages, tools, system):
+        r = self._anthropic.messages.create(
+            model=spec["model"], max_tokens=spec["max_tokens"],
+            system=system, messages=messages, tools=tools,
+        )
+        return Reply(stop_reason=r.stop_reason, content=r.content,
+                     usage=(r.usage.input_tokens, r.usage.output_tokens))
+
+    def _send_openai(self, spec, messages, tools, system):
+        msgs = [{"role": "system", "content": system}, *messages]
+        r = self._openai.chat.completions.create(
+            model=spec["model"], max_tokens=spec["max_tokens"],
+            messages=msgs, tools=to_openai_tools(tools),
+        )
+        return normalize_openai(r)                        # → the SAME Reply shape
+
+    def _with_retries(self, fn, tries=5):
+        for i in range(tries):
+            try:
+                return fn()
+            except anthropic.APIStatusError as e:
+                # retry only what's worth retrying: 429, 529, and transient 5xx.
+                # a 400/401/404 will never fix itself — surface it immediately.
+                if e.status_code not in (429, 529) and e.status_code &lt; 500:
+                    raise
+                if i == tries - 1:
+                    raise
+                time.sleep(2 ** i)                        # 1, 2, 4, 8, 16s backoff
+
+    def count_tokens(self, messages, model=None):
+        spec = self.models[model or self.default]
+        # provider-specific; anthropic exposes a dedicated endpoint
+        return self._anthropic.messages.count_tokens(
+            model=spec["model"], messages=messages).input_tokens</code></pre>
+<p>Notice <code>Reply</code> — a tiny dataclass with <code>stop_reason</code>, <code>content</code>, and <code>usage</code>. That is our <strong>canonical shape</strong>. <code>_send_anthropic</code> produces it directly because we happened to design the interface around Anthropic's response; <code>_send_openai</code> calls <code>normalize_openai</code> to <em>convert</em> into it. Either way, the loop receives the identical object and cannot tell which provider answered.</p>
+<p>And now watch what the loop from the last chapter becomes. Barely anything changes, which is the whole point:</p>
+<pre class="code" data-lang="python"><code>client = ModelClient()          # reads models.json once
+
+def run_agent(user_request, model=None):
+    messages = [{"role": "user", "content": user_request}]
+    while True:
+        reply = client.send(messages, TOOLS, model=model, system=SYSTEM_PROMPT)
+        messages.append({"role": "assistant", "content": reply.content})
+        if reply.stop_reason != "tool_use":
+            return text_of(reply)
+        # ... run tools, append tool_results, loop — exactly as before</code></pre>
+<p>The loop lost its <code>try/except</code>, lost its hard-coded model string, lost its knowledge of <code>anthropic</code> entirely. It gained an optional <code>model</code> argument it can pass through. To run the same agent on a local Ollama model, you now type <code>run_agent(req, model="local")</code> — or, as pi does it, hit a keystroke mid-session. No loop edit. That is the two-line swap made real.</p>
+<h2 id="why-the-boundary-matters-more-than-it-looks">Why the boundary matters more than it looks</h2>
+<p>It is tempting to file this under "nice refactor" and move on. Resist that. The client seam is load-bearing for three later layers, and skipping it now means retrofitting it under pressure later.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/the-model-client-4.png" alt="The client seam is not a one-time tidy-up — it is the single attachment point that cost metering, caching/fallback, and " loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="the-model-client-4.png"><span class="fig-ph">figure rendering &middot; The client seam is not a one-time tidy-up — it is the single attachmen</span></div><figcaption>The client seam is not a one-time tidy-up — it is the single attachment point that cost metering, caching/fallback, and new-provider support all clip onto later. Each is a bounded change at the seam instead of a hunt-and-replace through the whole harness.</figcaption></figure>
+<p>Because the client is the <em>only</em> code that sees raw usage, it is the one honest place to meter cost and enforce budgets — the <a href="compaction-and-summarization.html" target="_blank" rel="noopener">context engine</a> leans on exactly this to decide when to compact. Because the client is the only code that touches the SDK, it is the one place to add prompt caching, streaming, or a fallback provider ("if Anthropic is down, retry on Bedrock") without any other file noticing.</p>
+<p><label for="sn-the-model-client-4" class="sn-ref">4</label><input type="checkbox" id="sn-the-model-client-4" class="sn-toggle"><span class="sidenote"><sup>4</sup> A fallback provider is just a retry policy that swaps the config entry between attempts instead of resending to the same one — trivial to add <em>here</em>, and impossible to add cleanly if provider code is smeared across the loop. This is the concrete dividend of drawing the line early.</span></p>
+<p>And because provider quirks are quarantined behind the adapters, supporting a new provider is a new <code>_send_*</code> method plus a <code>models.json</code> line — a bounded, testable change, not a hunt-and-replace through your whole codebase.</p>
+<p>The general principle, which you will see again and again in this book, is this: <strong>push the parts that vary behind a narrow interface, and let the stable core speak one dialect.</strong> The model is the single most volatile dependency in a harness — new versions monthly, new providers weekly, prices and limits shifting under you. Wrapping it in a thin client is how you keep all that churn from ever reaching the loop, the tools, or the context engine. One brain, borrowed and swappable; one body, stable and yours.</p>
+<p>With the model safely behind a seam, we can turn to the thing the loop actually <em>does</em> with the model's replies — running the tools it asks for, safely. Next we make those tools trustworthy: <a href="tool-schemas-as-contracts.html" target="_blank" rel="noopener">tool schemas as contracts</a>.</p></div>
 <div class="prevnext"><a class="pn prev" href="streaming-responses.html"><span>‹ previous</span>Streaming responses into a terminal</a><a class="pn next" href="your-first-bare-harness.html"><span>next ›</span>Build: your first bare harness</a></div>
 </article></main>
 </div>

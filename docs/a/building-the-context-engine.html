@@ -18,10 +18,123 @@
 </div>
 <div class="layout">
 <nav class="sidebar" id="sidebar"><a class="sb-home" href="../index.html">‹ kernel engineering</a><details class="sb-sec"><summary><span class="sb-num">00</span> Start Here</summary><a class="sb-item" href="../a/what-is-a-harness.html">What is a harness?</a><a class="sb-item" href="../a/why-just-call-the-api-fails.html">Why 'just call the API' fails</a><a class="sb-item" href="../a/prompt-vs-context-vs-harness.html">Prompt vs. context vs. harness engineering</a><a class="sb-item" href="../a/the-five-layers.html">The anatomy: five layers of a harness<span class="chip">MAP</span></a><a class="sb-item" href="../a/what-you-will-build.html">What you will build: a pi-style harness</a><a class="sb-item" href="../a/how-to-use-this-site.html">How to use this site</a></details><details class="sb-sec"><summary><span class="sb-num">01</span> The Agent Loop</summary><a class="sb-item" href="../a/the-agent-loop-from-first-principles.html">The agent loop from first principles<span class="chip">LOOP</span></a><a class="sb-item" href="../a/messages-turns-and-roles.html">Messages, turns &amp; roles</a><a class="sb-item" href="../a/stop-conditions.html">Stop conditions: when does the loop end?</a><a class="sb-item" href="../a/streaming-responses.html">Streaming responses into a terminal</a><a class="sb-item" href="../a/the-model-client.html">The model client &amp; provider abstraction</a><a class="sb-item" href="../a/your-first-bare-harness.html">Build: your first bare harness<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">02</span> Tools &amp; the Execution Environment</summary><a class="sb-item" href="../a/tool-schemas-as-contracts.html">Tool schemas as contracts<span class="chip">TOOLS</span></a><a class="sb-item" href="../a/the-core-file-and-shell-tools.html">The core tools: read, write, edit, bash, search</a><a class="sb-item" href="../a/streaming-tool-calls-to-the-ui.html">Streaming tool calls to the UI</a><a class="sb-item" href="../a/permission-gates-and-approval-modes.html">Permission gates &amp; approval modes</a><a class="sb-item" href="../a/sandboxing-and-blast-radius.html">Sandboxing &amp; the blast-radius problem</a><a class="sb-item" href="../a/code-mode-vs-tool-mode.html">Code-mode vs. tool-mode</a></details><details class="sb-sec" open><summary><span class="sb-num">03</span> Context Engineering</summary><a class="sb-item" href="../a/the-context-window-as-a-resource.html">The context window as a resource<span class="chip">CONTEXT</span></a><a class="sb-item" href="../a/context-budgets.html">Context budgets: what goes in, what gets evicted</a><a class="sb-item" href="../a/compaction-and-summarization.html">Compaction &amp; summarization</a><a class="sb-item" href="../a/memory-and-claude-md.html">Memory systems &amp; the CLAUDE.md pattern</a><a class="sb-item" href="../a/system-prompts-as-infrastructure.html">System prompts as infrastructure, not prose</a><a class="sb-item active" href="../a/building-the-context-engine.html">Build: the context engine<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">04</span> Durability, Recovery &amp; Orchestration</summary><a class="sb-item" href="../a/durable-execution-and-checkpointing.html">Durable execution &amp; checkpointing<span class="chip">DURABLE</span></a><a class="sb-item" href="../a/replay-and-resumable-sessions.html">Replay &amp; resumable sessions</a><a class="sb-item" href="../a/self-healing-loops.html">Self-healing loops: retries &amp; failure classification</a><a class="sb-item" href="../a/sub-agents-and-handoffs.html">Sub-agents &amp; handoffs</a><a class="sb-item" href="../a/supervision-and-plan-mode.html">Supervision &amp; plan mode</a><a class="sb-item" href="../a/human-in-the-loop.html">Human-in-the-loop: plans, approvals, escalation<span class="chip">BUILD</span></a></details><details class="sb-sec"><summary><span class="sb-num">05</span> Production Harnesses &amp; Capstone</summary><a class="sb-item" href="../a/pi-internals.html">pi internals: the minimal-surface philosophy<span class="chip">pi</span></a><a class="sb-item" href="../a/hermes-internals.html">Hermes internals: a research lab's harness<span class="chip">HERMES</span></a><a class="sb-item" href="../a/claude-code-internals.html">Claude Code internals: skills, hooks, MCP, sub-agents<span class="chip">CC</span></a><a class="sb-item" href="../a/evaluating-a-harness.html">Evaluating a harness: how you know yours works</a><a class="sb-item" href="../a/the-capstone.html">The capstone: your own harness<span class="chip">SHIP</span></a></details></nav>
-<main class="content"><article class="worklog stub">
+<main class="content"><article class="worklog">
 <div class="art-kicker"><span class="art-sec">03 · Context Engineering</span></div>
 <h1 class="art-title">Build: the context engine <span class="chip lg">BUILD</span></h1>
-<div class="art-body"><p class="lead">Compaction plus a persistent memory layer wired into the loop, so your harness survives a long session and remembers across runs.</p><div class="stub">This worklog is being written. It will follow the hypothesis → measure → figure rhythm of the rest of the site.</div></div>
+<div class="art-body"><p>By now the loop from <a href="your-first-bare-harness.html" target="_blank" rel="noopener">your first bare harness</a> works — until it doesn't. Point it at a real task and let it run. Somewhere around the twentieth lap, one of two things happens. Either the API rejects your call outright because the <code>messages</code> array has outgrown the model's context window, or — more insidiously — the model quietly gets worse, forgetting what you asked ten turns ago, re-reading files it already read, contradicting a decision it made at the start. The agent didn't break. It ran out of the one resource nothing else can substitute for: room in the context window.</p>
+<p>This chapter is where we fix that. We are building <strong>Layer 3, the context engine</strong> — the subsystem that decides, on every single lap, what the model gets to see. It has two jobs. First, keep the running conversation under budget by <strong>compacting</strong> it before it overflows. Second, give the agent a <strong>persistent memory</strong> so it starts every session already knowing your project, and assemble that memory into the system prompt. We wire both directly into the loop we already have. By the end, the same agent that choked at turn twenty will survive a session of two hundred.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/building-the-context-engine-1.png" alt="The context window is a fixed-size desk, not an infinite cabinet. The context engine keeps the desk uncluttered and spil" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="building-the-context-engine-1.png"><span class="fig-ph">figure rendering &middot; The context window is a fixed-size desk, not an infinite cabinet. The </span></div><figcaption>The context window is a fixed-size desk, not an infinite cabinet. The context engine keeps the desk uncluttered and spills the rest to disk.</figcaption></figure>
+<h2 id="why-this-is-the-scarcest-resource-in-the-system">Why this is the scarcest resource in the system</h2>
+<p>A model has a hard limit on how many tokens it can attend to in one call — call it the <strong>context window</strong>. But the ceiling is not really the problem. The problem is that quality degrades long before you hit the ceiling. Anthropic's guidance on context engineering puts it bluntly: context is a finite resource with <em>diminishing returns</em>, and the goal of the whole discipline is to find "the smallest possible set of high-signal tokens that maximize the likelihood of some desired outcome."<label for="sn-building-the-context-engine-1" class="sn-ref">1</label><input type="checkbox" id="sn-building-the-context-engine-1" class="sn-toggle"><span class="sidenote"><sup>1</sup> This is why context engineering is its own craft, distinct from prompt engineering — see <a href="prompt-vs-context-vs-harness.html" target="_blank" rel="noopener">prompt vs context vs harness</a>. Prompt engineering asks "what do I say once"; context engineering asks "what does the model see <em>every turn</em>", which is a curation problem, not a wording problem.</span></p>
+<p>Every token you spend on a stale tool result is a token stolen from the model's attention. A raw agent loop never cleans up after itself: every file it reads, every command it runs, every intermediate thought gets appended to <code>messages</code> forever. The engine's job is to be the thing that <em>does</em> clean up — deciding what is high-signal and worth keeping, and what is noise that can be summarized or dropped.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/building-the-context-engine-2.png" alt="Naive loops append until they overflow. The engine replaces a long verbatim history with a faithful summary, keeping rec" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="building-the-context-engine-2.png"><span class="fig-ph">figure rendering &middot; Naive loops append until they overflow. The engine replaces a long ver</span></div><figcaption>Naive loops append until they overflow. The engine replaces a long verbatim history with a faithful summary, keeping recent turns intact.</figcaption></figure>
+<h2 id="job-one-count-the-tokens-each-turn">Job one: count the tokens each turn</h2>
+<p>You cannot manage a budget you don't measure. So the very first thing the engine does, every lap, is count how many tokens the current <code>messages</code> array will cost. The honest way is to ask the provider — most expose a token-counting endpoint so you get the <em>exact</em> number the model will see, tokenizer and all.<label for="sn-building-the-context-engine-2" class="sn-ref">2</label><input type="checkbox" id="sn-building-the-context-engine-2" class="sn-toggle"><span class="sidenote"><sup>2</sup> Anthropic's SDK has a <code>count_tokens</code> call that mirrors the real tokenizer. A cheap local approximation is <code>len(text) / 4</code> characters-per-token, which is fine for a rough guard but will drift on code and non-English text. Use the real counter when the decision to compact is expensive to get wrong.</span></p>
+<pre class="code" data-lang="python"><code>import anthropic
+client = anthropic.Anthropic()
+
+MODEL = "claude-sonnet-4-6"
+CONTEXT_LIMIT = 200_000       # the model's hard ceiling
+COMPACT_THRESHOLD = 0.75      # start compacting at 75% full — don't wait for the wall
+
+def count_tokens(system, messages, tools):
+    r = client.messages.count_tokens(
+        model=MODEL, system=system, messages=messages, tools=tools,
+    )
+    return r.input_tokens</code></pre>
+<p>Notice we compact at <strong>75%</strong>, not 100%. Two reasons. First, the model's <em>output</em> also has to fit alongside the input, so the usable budget is smaller than the raw ceiling. Second — and this is the real reason — quality sags in the upper reaches of the window, so we want to act while there's still headroom, not scramble at the edge. The threshold is a dial you tune per model and per task.</p>
+<h2 id="job-two-compact-when-over-budget">Job two: compact when over budget</h2>
+<p><strong>Compaction</strong> is the move that makes long sessions possible. When the token count crosses the threshold, we take the older stretch of the conversation, ask the model to summarize it, and <em>replace</em> those many messages with that one summary. Recent turns stay verbatim — they're the working set — while the distant past collapses into a dense recap.</p>
+<p>The art is entirely in <em>what the summary preserves</em>. Anthropic's advice is to "maximize recall first, then improve precision": capture everything that could matter — decisions, files touched, the goal, open problems — then tighten to cut the redundant. What you must never lose is the load-bearing state: the task, the constraints, the choices already committed to. What you can happily drop is the verbatim file dump the model read once and has already used.</p>
+<pre class="code" data-lang="python"><code>COMPACTION_PROMPT = """You are compacting an agent's conversation to save context.
+Write a dense summary that preserves, in this priority order:
+1. The user's original goal and any hard constraints.
+2. Decisions made and WHY (architecture, file choices, approaches rejected).
+3. Files created or edited, and their current state.
+4. What is done, what is in progress, and the immediate next step.
+Drop verbatim file contents, tool logs, and idle chatter — keep the facts, not the transcript.
+Write it as notes to your future self, not prose."""
+
+def compact(messages, keep_recent=6):
+    head, tail = messages[:-keep_recent], messages[-keep_recent:]   # summarize head, keep tail
+    summary = client.messages.create(
+        model=MODEL, max_tokens=2048,
+        system=COMPACTION_PROMPT,
+        messages=head + [{"role": "user",
+                          "content": "Summarize the conversation above per your instructions."}],
+    )
+    summary_text = summary.content[0].text
+    return [{"role": "user",
+             "content": f"[SUMMARY OF EARLIER SESSION]\n{summary_text}"}] + tail</code></pre>
+<p>We split the array into a <code>head</code> we summarize and a <code>tail</code> of the last few turns we keep untouched. The <code>keep_recent</code> window matters: the model needs the immediate context — the last tool result, the current sub-task — in full fidelity, because a summary is lossy and you don't want to lose the thread you're actively pulling on.<label for="sn-building-the-context-engine-3" class="sn-ref">3</label><input type="checkbox" id="sn-building-the-context-engine-3" class="sn-toggle"><span class="sidenote"><sup>3</sup> Real harnesses guard the boundary carefully: you must not split a <code>tool_use</code> block from its matching <code>tool_result</code>, or the API rejects the array as malformed. A production compactor snaps <code>keep_recent</code> to a clean turn boundary. We elide that bookkeeping here to keep the idea legible.</span> The old head — possibly dozens of messages and tens of thousands of tokens — becomes a single tidy note. This is the tool-result-clearing and summarization pattern that Claude Code and pi both use under the hood; the summary literally becomes the new opening of the conversation.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/building-the-context-engine-3.png" alt="Compaction in five steps: keep the recent tail verbatim, summarize the head into one card, and splice them back together" loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="building-the-context-engine-3.png"><span class="fig-ph">figure rendering &middot; Compaction in five steps: keep the recent tail verbatim, summarize the</span></div><figcaption>Compaction in five steps: keep the recent tail verbatim, summarize the head into one card, and splice them back together — a long history becomes a short one.</figcaption></figure>
+<h2 id="job-three-persistent-memory-load-claude-md-at-the-start">Job three: persistent memory — load CLAUDE.md at the start</h2>
+<p>Compaction keeps a <em>single</em> session alive. But your agent should also carry knowledge <em>across</em> sessions — the project's conventions, the commands to run tests, the things you'd otherwise re-explain every morning. That's what a <strong>memory file</strong> is for. Claude Code calls its convention <code>CLAUDE.md</code>; pi and Cursor have their own equivalents. It is nothing more exotic than a markdown file that lives in the repo and gets loaded into context at the <em>start</em> of every run, before the user has even typed anything.</p>
+<p>This is the structured note-taking idea from Anthropic's playbook, turned into a first-class part of the harness: durable knowledge lives on disk, outside the volatile context window, and gets pulled in on demand. The agent can also <em>write</em> to it — appending a hard-won fact ("the integration tests need <code>DATABASE_URL</code> set") so the next session starts smarter than this one ended.</p>
+<pre class="code" data-lang="python"><code>import pathlib
+
+def load_memory(project_dir="."):
+    """Load persistent project memory, if present."""
+    for name in ("CLAUDE.md", "AGENTS.md", ".agent/memory.md"):
+        p = pathlib.Path(project_dir) / name
+        if p.exists():
+            return p.read_text()[:8000]     # cap it — memory is a briefing, not a novel
+    return ""</code></pre>
+<p>We cap the memory at a few thousand tokens on purpose. A memory file that grows without bound just recreates the overflow problem one level up — it should be a <em>briefing</em>, the high-signal facts a new teammate would need, not a data dump.<label for="sn-building-the-context-engine-4" class="sn-ref">4</label><input type="checkbox" id="sn-building-the-context-engine-4" class="sn-toggle"><span class="sidenote"><sup>4</sup> This is the same "smallest set of high-signal tokens" principle applied to memory. A good <code>CLAUDE.md</code> is ruthlessly curated: build commands, code conventions, gotchas, and pointers to where things live — not the whole architecture doc, which the agent can read on demand with its file tools.</span></p>
+<h2 id="job-four-assemble-the-system-prompt">Job four: assemble the system prompt</h2>
+<p>The system prompt is the agent's standing identity and rulebook, and it is <em>assembled</em>, not hardcoded. The engine stitches together a few sections every run: who the agent is and how it should behave, the loaded memory file, and often a snapshot of the environment (working directory, OS, today's date). Anthropic recommends giving this structure with clear headers or XML tags so each part is unambiguous.</p>
+<pre class="code" data-lang="python"><code>def build_system_prompt(project_dir="."):
+    identity = (
+        "You are a coding agent operating in a terminal. Work in small, verifiable steps. "
+        "Prefer reading before editing. Explain what you are about to do, then do it."
+    )
+    memory = load_memory(project_dir)
+    env = f"&lt;env&gt;\ncwd: {pathlib.Path(project_dir).resolve()}\nos: {__import__('platform').system()}\n&lt;/env&gt;"
+
+    parts = [identity, env]
+    if memory:
+        parts.append(f"&lt;project_memory&gt;\n{memory}\n&lt;/project_memory&gt;")
+    return "\n\n".join(parts)</code></pre>
+<p>That <code>&lt;project_memory&gt;</code> block is the payoff of the whole persistence story: on turn zero, before the user says a word, the agent already knows your build command and your conventions. It behaves like a colleague who read the onboarding doc, not a stranger who needs everything re-explained.</p>
+<h2 id="wiring-layer-3-into-the-loop">Wiring Layer 3 into the loop</h2>
+<p>Now we thread all four jobs into the loop from the last chapter. The changes are small and surgical — that's the point. The engine sits at the <em>top</em> of each lap, guarding the model call.</p>
+<pre class="code" data-lang="python"><code>def run_agent(user_request, project_dir="."):
+    system = build_system_prompt(project_dir)                 # memory loaded once, up front
+    messages = [{"role": "user", "content": user_request}]
+
+    while True:
+        # --- context engine: guard the budget before every call ---
+        used = count_tokens(system, messages, TOOLS)
+        if used &gt; CONTEXT_LIMIT * COMPACT_THRESHOLD:
+            messages = compact(messages)                      # collapse the history, keep the tail
+
+        reply = call_model(system, messages, TOOLS)           # 1. ask the model
+        messages.append({"role": "assistant", "content": reply.content})
+
+        if reply.stop_reason != "tool_use":                   # 2. no tool? we're done
+            return text_of(reply)
+
+        tool_results = []
+        for block in reply.content:                           # 3. run every tool it asked for
+            if block.type == "tool_use":
+                out = run_tool(block.name, block.input)
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": str(out),
+                })
+        messages.append({"role": "user", "content": tool_results})  # 4. feed results back
+        # 5. loop — and the engine will re-check the budget at the top</code></pre>
+<p>Three lines of change and the loop is transformed. The system prompt is built once, carrying the memory file into every turn. And before each model call, the engine counts tokens and compacts if we've crossed the threshold. The loop itself — the beating heart from Layer 1 — is otherwise untouched. That is the discipline of layering: each new capability slots in without rewriting what came before.</p>
+<figure class="fig"><div class="fig-frame"><img src="../figures/building-the-context-engine-4.png" alt="The Layer 1 loop with the context engine bolted on: token-check-and-compact guards the top of every lap, and persistent " loading="lazy" onerror="this.parentNode.classList.add(&#39;fig-missing&#39;);this.remove();" data-fig="building-the-context-engine-4.png"><span class="fig-ph">figure rendering &middot; The Layer 1 loop with the context engine bolted on: token-check-and-co</span></div><figcaption>The Layer 1 loop with the context engine bolted on: token-check-and-compact guards the top of every lap, and persistent memory rides in the assembled system prompt.</figcaption></figure>
+<h2 id="watching-it-survive-a-long-session">Watching it survive a long session</h2>
+<p>Here is the difference, concretely. Give the agent a genuinely long task — <em>"audit every file in <code>src/</code>, note issues, and write a report"</em> — on a directory with forty files.</p>
+<p>Without the engine, the loop reads file after file, appending each 3,000-token dump to <code>messages</code>. Around file eighteen the array crosses 200k tokens and the next <code>call_model</code> throws a hard error. The session is dead, and everything the agent learned in the first seventeen files dies with it.</p>
+<p>With the engine, watch turn nineteen. The token count crosses 150k, <code>compact()</code> fires, and the seventeen files' worth of raw dumps and reasoning collapse into a single summary: <em>"Audited 17 of 40 files. Issues found: [list]. Next: <code>src/handlers/</code>."</em> The array drops from ~160k tokens back to ~12k. The agent reads on, compacts again near file thirty-six, and finishes the report. Same model, same loop — but now it <em>survives</em>, because the engine kept the desk clear the whole way through.<label for="sn-building-the-context-engine-5" class="sn-ref">5</label><input type="checkbox" id="sn-building-the-context-engine-5" class="sn-toggle"><span class="sidenote"><sup>5</sup> Compaction is lossy by nature: a fact the summarizer judged unimportant is gone. This is exactly why the persistent memory file matters — anything that must never be forgotten belongs in <code>CLAUDE.md</code> or a notes file the agent writes to, not in the volatile conversation that compaction will eventually crush.</span></p>
+<h2 id="what-it-still-misses">What it still misses</h2>
+<p>We have a harness that keeps its head over a long session and starts each one already knowing your project. That is Layer 3 done. But two honest gaps remain.</p>
+<p>First, we still load everything eagerly — the whole memory file, whole files when the model reads them. The more advanced move is <strong>just-in-time retrieval</strong>: keep lightweight references and pull content only when needed, so the agent explores the codebase the way you do rather than swallowing it whole. That's a refinement of this same engine, and a natural next study.</p>
+<p>Second — and this is the bridge to the next layer — our compaction and memory live entirely in process memory and one flat file. If the process crashes mid-task, the <em>current</em> uncompacted conversation is gone. Compaction survives a long run; it does not survive a <em>dead</em> run. Making the whole agent state durable — checkpointed to disk so a killed process can replay instead of redo — is exactly <a href="durable-execution-and-checkpointing.html" target="_blank" rel="noopener">Layer 4, durability</a>, which is where we head next.</p></div>
 <div class="prevnext"><a class="pn prev" href="system-prompts-as-infrastructure.html"><span>‹ previous</span>System prompts as infrastructure, not prose</a><a class="pn next" href="durable-execution-and-checkpointing.html"><span>next ›</span>Durable execution &amp; checkpointing</a></div>
 </article></main>
 </div>
