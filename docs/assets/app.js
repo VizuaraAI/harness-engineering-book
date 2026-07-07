@@ -1,3 +1,31 @@
+// simple site password gate (client-side deterrent)
+(function(){
+  var KEY="he_gate_ok", PASS="harness2026";
+  try{ if(sessionStorage.getItem(KEY)==="1") return; }catch(e){}
+  document.documentElement.style.overflow="hidden";
+  function mount(){
+    var ov=document.createElement("div");
+    ov.id="__gate";
+    ov.style.cssText="position:fixed;inset:0;z-index:2147483647;background:#0b0f14;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace";
+    ov.innerHTML='<form id="__gf" style="text-align:center;color:#cfe3f0;width:320px;max-width:82vw">'
+      +'<div style="font-size:14px;margin-bottom:16px;letter-spacing:.3px;opacity:.85">Vizuara · Harness Engineering</div>'
+      +'<div style="font-size:12px;margin-bottom:12px;opacity:.6">This site is private. Enter the password.</div>'
+      +'<input id="__gp" type="password" autocomplete="current-password" placeholder="password" style="padding:11px 13px;width:100%;box-sizing:border-box;border-radius:9px;border:1px solid #26333f;background:#111820;color:#dff;font-family:inherit;font-size:14px;outline:none">'
+      +'<div id="__ge" style="color:#e77b7b;height:16px;font-size:12px;margin-top:9px"></div>'
+      +'<button type="submit" style="margin-top:4px;padding:10px 22px;border-radius:9px;border:0;background:#2f8f6b;color:#fff;cursor:pointer;font-family:inherit;font-size:13px">Enter &rarr;</button>'
+      +'</form>';
+    document.body.appendChild(ov);
+    var inp=document.getElementById("__gp");
+    inp.focus();
+    document.getElementById("__gf").addEventListener("submit",function(e){
+      e.preventDefault();
+      if(inp.value===PASS){ try{sessionStorage.setItem(KEY,"1");}catch(e){} ov.remove(); document.documentElement.style.overflow=""; }
+      else { document.getElementById("__ge").textContent="Incorrect password"; inp.value=""; inp.focus(); }
+    });
+  }
+  if(document.body) mount(); else document.addEventListener("DOMContentLoaded",mount);
+})();
+
 // theme toggle
 (function(){
   var THEMES=[["terminal","Terminal"],["light","Light"]];
